@@ -1,0 +1,11 @@
+{
+  "title": "Hyper Bubble Shooter",
+  "description": "Experience a polished Bubble Shooter game with engaging mechanics and hyper-casual visuals, designed for players seeking fun and challenging arcade gameplay.",
+  "robots": {
+    "index": false
+  },
+  "accessibility": {
+    "addBypassLinks": false,
+    "ignoreReducedMotion": false
+  }
+}

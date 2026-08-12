@@ -1,0 +1,34 @@
+@import url('https://fonts.googleapis.com/css2?family=Bungee&family=Outfit:wght@400;600;700;800;900&display=swap');
+
+html, body, #root { width: 100%; height: 100%; margin: 0; }
+body { overflow: hidden; background: #73dff4; font-family: 'Outfit', sans-serif; }
+button, canvas { -webkit-tap-highlight-color: transparent; }
+.game-shell {
+  width: 100vw;
+  height: 100dvh;
+  overflow: hidden;
+  background:
+    radial-gradient(ellipse 38% 22% at 50% 9%, rgba(255,255,255,.5), transparent 72%),
+    radial-gradient(ellipse 34% 25% at 11% 86%, rgba(6,139,177,.24), transparent 70%),
+    radial-gradient(ellipse 30% 23% at 90% 80%, rgba(43,178,155,.18), transparent 72%),
+    linear-gradient(180deg, #71dff5 0%, #a8e8ec 56%, #7acfc4 100%);
+}
+.game-canvas {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  touch-action: none;
+  user-select: none;
+  cursor: crosshair;
+}
+.game-canvas canvas { position: absolute; inset: 0; display: block; }
+@media (min-width: 900px) {
+  .game-shell {
+    background:
+      radial-gradient(ellipse 36% 30% at 50% 8%, rgba(255,255,255,.58), transparent 72%),
+      radial-gradient(ellipse 25% 40% at 4% 95%, rgba(32,139,167,.30), transparent 70%),
+      radial-gradient(ellipse 25% 40% at 96% 93%, rgba(54,162,132,.24), transparent 70%),
+      linear-gradient(180deg, #71dff5 0%, #a4e7eb 54%, #78cbbd 100%);
+  }
+}
