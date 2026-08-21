@@ -4,7 +4,7 @@ React + Vite project running inside Figma Make. A Bubble Shooter arcade game ren
 
 ## Development Server
 
-A Vite development server is **already running** on `$PORT` (default 8443). You don't need to start it manually.
+A Vite development server is **already running** on `$PORT` (default 8444). You don't need to start it manually.
 
 - Preview URL: The user can access the running app through the preview panel
 - Hot reload: Changes to source files are reflected immediately

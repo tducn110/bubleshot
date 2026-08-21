@@ -133,7 +133,7 @@ export class OverlaysLayer {
   }
 
   relayout(v: GameView, t: GameTextures) {
-    for (const c of this.root.children) c.destroy();
+    for (const c of this.root.removeChildren()) c.destroy();
     const l = v.layout;
     const cx = l.LW / 2;
     const cy = l.LH / 2;
