@@ -2,6 +2,7 @@ import { Container, NineSliceSprite, Rectangle, Sprite, Text, type TextStyleFont
 import type { GameView } from "../types";
 import type { BubbleShooterEngine } from "../engine";
 import type { GameTextures } from "./textures";
+import { showInterstitial } from "../../integrations/ads/googleH5Ads";
 
 function card(t: GameTextures, w: number, h: number, red: boolean): NineSliceSprite {
   return new NineSliceSprite({
@@ -123,6 +124,7 @@ export class OverlaysLayer {
   private lastWinScore = "";
   private lastRank = "";
   private lastLoseScore = "";
+  private transitionPending = false;
 
   constructor(
     parent: Container,
@@ -130,6 +132,15 @@ export class OverlaysLayer {
     private engine: BubbleShooterEngine,
   ) {
     parent.addChild(this.root);
+  }
+
+  private runTransition(name: string, action: () => void): void {
+    if (this.transitionPending) return;
+    this.transitionPending = true;
+    void showInterstitial({ type: "next", name }).finally(() => {
+      action();
+      this.transitionPending = false;
+    });
   }
 
   relayout(v: GameView, t: GameTextures) {
@@ -154,8 +165,8 @@ export class OverlaysLayer {
       this.winRank,
       line("SCORE", 12, 400, "rgba(180,200,255,.6)", 10),
       this.winScore,
-      button(t, -40, 78, 68, 36, "RETRY", "#E94560", () => this.engine.retry()),
-      button(t, 40, 78, 68, 36, "NEXT", "#2DC653", () => this.engine.nextStage()),
+      button(t, -40, 78, 68, 36, "RETRY", "#E94560", () => this.runTransition("retry_stage", () => this.engine.retry())),
+      button(t, 40, 78, 68, 36, "NEXT", "#2DC653", () => this.runTransition("next_stage", () => this.engine.nextStage())),
     );
     this.win.addChild(winCard, winBox);
     this.win.visible = false;
@@ -173,8 +184,8 @@ export class OverlaysLayer {
       title("GAME OVER", 28, "#FF4D6D", -72),
       line("SCORE", 12, 400, "rgba(180,200,255,.6)", -30),
       this.loseScore,
-      button(t, -38, 46, 64, 36, "RETRY", "#E94560", () => this.engine.retry()),
-      button(t, 38, 46, 64, 36, "MENU", "#3ABFF8", () => this.engine.menu()),
+      button(t, -38, 46, 64, 36, "RETRY", "#E94560", () => this.runTransition("retry_after_loss", () => this.engine.retry())),
+      button(t, 38, 46, 64, 36, "MENU", "#3ABFF8", () => this.runTransition("return_to_menu", () => this.engine.menu())),
     );
     this.lose.addChild(loseCard, loseBox);
     this.lose.visible = false;

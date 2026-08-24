@@ -12,3 +12,5 @@ logs/
 .claude-replay.*
 .tmp-*
 .vercel
+.codegraph/
+
