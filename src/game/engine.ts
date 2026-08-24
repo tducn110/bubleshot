@@ -138,8 +138,13 @@ export class BubbleShooterEngine {
 
   private _pm: (e: PointerEvent) => void
   private _pd: (e: PointerEvent) => void
+  private _pu: (e: PointerEvent) => void
+  private _pc: (e: PointerEvent) => void
+  private _pl: (e: PointerEvent) => void
   private _kd: (e: KeyboardEvent) => void
   private _rs: () => void
+  private isAiming = false
+  private lastPointerType = "mouse"
 
   constructor(cv: HTMLCanvasElement) {
     this.cv = cv
@@ -147,6 +152,9 @@ export class BubbleShooterEngine {
       !("isConnected" in cv) || (!cv.isConnected && cv.clientWidth === 0)
     this._pm = (e) => this.onMove(e)
     this._pd = (e) => this.onDown(e)
+    this._pu = (e) => this.onUp(e)
+    this._pc = (e) => this.onCancel(e)
+    this._pl = (e) => this.onLeave(e)
     this._kd = (e) => this.onKey(e)
     this._rs = () => this.computeTransform()
     this.computeTransform()
@@ -160,6 +168,9 @@ export class BubbleShooterEngine {
     if (this.inputAttached) {
       this.cv.removeEventListener("pointermove", this._pm)
       this.cv.removeEventListener("pointerdown", this._pd)
+      this.cv.removeEventListener("pointerleave", this._pl)
+      window.removeEventListener("pointerup", this._pu)
+      window.removeEventListener("pointercancel", this._pc)
       window.removeEventListener("keydown", this._kd)
       window.removeEventListener("resize", this._rs)
       this.inputAttached = false
@@ -171,6 +182,9 @@ export class BubbleShooterEngine {
     if (!this.inputAttached) {
       this.cv.addEventListener("pointermove", this._pm)
       this.cv.addEventListener("pointerdown", this._pd, { passive: false })
+      this.cv.addEventListener("pointerleave", this._pl)
+      window.addEventListener("pointerup", this._pu)
+      window.addEventListener("pointercancel", this._pc)
       window.addEventListener("keydown", this._kd)
       window.addEventListener("resize", this._rs)
       this.inputAttached = true
@@ -225,6 +239,7 @@ export class BubbleShooterEngine {
   // this engine never knows pixel coordinates of any button.
 
   private onMove(e: PointerEvent) {
+    this.lastPointerType = e.pointerType
     const l = this.sToL(e.clientX, e.clientY)
     this.plx = l.x
     this.ply = l.y
@@ -237,10 +252,40 @@ export class BubbleShooterEngine {
       this.uiEat = false
       return
     }
+    this.lastPointerType = e.pointerType
     const l = this.sToL(e.clientX, e.clientY)
     this.plx = l.x
     this.ply = l.y
-    if (this.canShoot) this.doShoot()
+    if (this.canShoot) {
+      this.isAiming = true
+      this.calcTraj()
+    }
+  }
+
+  private onUp(e: PointerEvent) {
+    this.lastPointerType = e.pointerType
+    if (!this.isAiming) return
+    this.isAiming = false
+    const l = this.sToL(e.clientX, e.clientY)
+    this.plx = l.x
+    this.ply = l.y
+    if (this.canShoot) {
+      this.doShoot()
+    }
+    this.clearTrajectory()
+  }
+
+  private onCancel(e: PointerEvent) {
+    this.lastPointerType = e.pointerType
+    this.isAiming = false
+    this.clearTrajectory()
+  }
+
+  private onLeave(e: PointerEvent) {
+    this.lastPointerType = e.pointerType
+    if (e.pointerType === "mouse") {
+      this.clearTrajectory()
+    }
   }
 
   private onKey(e: KeyboardEvent) {
@@ -452,6 +497,15 @@ export class BubbleShooterEngine {
   // ─── Trajectory ──────────────────────────────────────────────────────────
 
   private calcTraj() {
+    if (!this.canShoot) {
+      this.clearTrajectory()
+      return
+    }
+    const show = this.isAiming || this.lastPointerType === "mouse"
+    if (!show) {
+      this.clearTrajectory()
+      return
+    }
     const { WALL_L, WALL_R, BOARD_TOP, R, ROW_H, SHOOTER_X, SHOOTER_Y } =
       this.layout
     this.clearTrajectory()

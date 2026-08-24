@@ -42,7 +42,7 @@ function roundRectTexture(
   h: number,
   r: number,
   fill: string,
-  stroke?: { color: string; width: number },
+  stroke?: { color: string width: number },
 ): Texture {
   const [cv, g] = canvas(w, h)
   rr(g, 0.5, 0.5, w - 1, h - 1, r)
