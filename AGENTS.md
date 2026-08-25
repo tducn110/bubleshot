@@ -46,3 +46,12 @@ All game visuals are rendered by PixiJS via `src/game/render/`; `src/index.css` 
 - Use double quotes for strings containing apostrophes (`"We're here to help"`), or escape them in single-quoted strings. An unescaped apostrophe in a single-quoted string breaks the build.
 - Ensure JSX tags are closed and braces are balanced.
 - Export components as default exports.
+
+## UI icon ownership
+
+- Before drawing any UI icon, search the installed icon dependencies and existing SVG assets; prefer `lucide-react`, then `react-icons`.
+- React/DOM UI uses the actual approved icon component.
+- Pixi/canvas UI uses the official SVG/path source converted to a cached Pixi `Texture` and rendered with `Sprite`.
+- Never approximate standard UI icons with `Pixi Graphics` or hand-written `moveTo()`/`lineTo()` geometry. This includes pause, play, volume, music, trophy, heart, settings, ads, restart, and menu icons.
+- `Pixi Graphics` remains valid for primitive gameplay geometry, board cells, trajectories, progress/toggle primitives, scrims, and procedural effects only.
+- If no approved icon or existing SVG asset exists, stop and request a custom asset instead of inventing an approximation.

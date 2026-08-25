@@ -5,6 +5,51 @@ import { PixiGame } from "../game/render/game"
 
 export default function BubbleGame() {
   const hostRef = useRef<HTMLDivElement>(null)
+  const debugHudRef = useRef<HTMLDivElement>(null)
+  const debugHud =
+    import.meta.env.DEV &&
+    new URLSearchParams(window.location.search).has("debugHud")
+
+  useEffect(() => {
+    if (!debugHud) return
+    let frame = 0
+    let disposed = false
+
+    const updateOverlay = () => {
+      if (disposed) return
+      const canvas = hostRef.current?.querySelector<HTMLCanvasElement>("canvas")
+      const overlay = debugHudRef.current
+      const raw = canvas?.dataset.hudDebug
+      if (overlay && raw) {
+        const metrics = JSON.parse(raw) as {
+          viewportWidth: number
+          viewportHeight: number
+          hud: { x: number; y: number; width: number; height: number }
+          buttonDiameter: number
+          bubbleDiameter: number
+        }
+        // Keep the audit box below the HUD. Drawing it over the score makes
+        // the real Pixi text look blurry and hides the contrast we are
+        // trying to verify on the mobile layout.
+        overlay.style.left = `${metrics.hud.x}px`
+        overlay.style.top = `${metrics.hud.y + metrics.hud.height + 4}px`
+        overlay.style.width = `${metrics.hud.width}px`
+        overlay.style.height = "auto"
+        overlay.textContent = [
+          `HUD ${metrics.hud.x.toFixed(1)},${metrics.hud.y.toFixed(1)} ${metrics.hud.width.toFixed(1)}×${metrics.hud.height.toFixed(1)}px`,
+          `button Ø ${metrics.buttonDiameter.toFixed(1)}px`,
+          `bubble Ø ${metrics.bubbleDiameter.toFixed(1)}px`,
+        ].join("  ")
+      }
+      frame = window.requestAnimationFrame(updateOverlay)
+    }
+
+    frame = window.requestAnimationFrame(updateOverlay)
+    return () => {
+      disposed = true
+      window.cancelAnimationFrame(frame)
+    }
+  }, [debugHud])
 
   useEffect(() => {
     if (!hostRef.current) return
@@ -19,6 +64,9 @@ export default function BubbleGame() {
     const destroyApp = () => {
       if (pixiApp && !destroyed) {
         destroyed = true
+        if (window.__PIXI_DEVTOOLS__?.app === pixiApp)
+          window.__PIXI_DEVTOOLS__ = {}
+        if (window.__PIXI_APP__ === pixiApp) window.__PIXI_APP__ = undefined
         pixiApp.destroy(
           { removeView: true },
           // Core WebP textures belong to Pixi's Assets cache; GameTextures
@@ -41,7 +89,8 @@ export default function BubbleGame() {
         await pixiApp.init({
           preference: "webgl",
           antialias: true,
-          resolution: 1,
+          autoDensity: true,
+          resolution: Math.min(2, Math.max(1, window.devicePixelRatio || 1)),
           backgroundAlpha: 0,
           resizeTo: hostRef.current!,
         })
@@ -61,6 +110,13 @@ export default function BubbleGame() {
           destroyGame()
           destroyApp()
           return
+        }
+        if (import.meta.env.DEV) {
+          const { attachPixiDevtools } = await import("../game/render/devtools")
+          await attachPixiDevtools(pixiApp)
+
+          // Keep the legacy alias for the unofficial inspector extension.
+          window.__PIXI_APP__ = pixiApp
         }
         if (
           import.meta.env.DEV &&
@@ -99,10 +155,8 @@ export default function BubbleGame() {
   }, [])
 
   return (
-    <div
-      ref={hostRef}
-      className="game-canvas"
-      aria-label="Bubble Shooter game"
-    />
+    <div ref={hostRef} className="game-canvas" aria-label="Bubble Shooter game">
+      {debugHud && <div ref={debugHudRef} className="hud-debug-overlay" />}
+    </div>
   )
 }

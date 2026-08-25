@@ -8,6 +8,21 @@ export interface LayoutRect {
   height: number
 }
 
+export interface HudLayout {
+  contentRect: LayoutRect
+  scoreRect: LayoutRect
+  actionRect: LayoutRect
+  dashboardRect: LayoutRect
+  pauseRect: LayoutRect
+}
+
+// Keep the six-row stage-1 opening below the danger threshold even when
+// landscape height, rather than width, is the board's limiting dimension.
+const MIN_DANGER_ROWS = 7
+// The danger line is a gameplay boundary, so it stays close to the shooter
+// instead of being capped at an arbitrary row and leaving dead space below it.
+const DANGER_TO_SHOOTER_TOP = 2.4
+
 /** One measured-host coordinate system for every phone portrait size. */
 export class Layout {
   LW = CANONICAL_WIDTH
@@ -31,18 +46,32 @@ export class Layout {
   MAX_ROWS = this.DANGER_ROW + 4
   safeTop = 0
   safeBottom = CANONICAL_HEIGHT
-  sideInset = 16
-  hudTop = 16
-  hudBottom = 64
+  safeLeft = 0
+  safeWidth = CANONICAL_WIDTH
+  hudRect: LayoutRect = {
+    x: 12,
+    y: 28,
+    width: CANONICAL_WIDTH - 24,
+    height: 80,
+  }
+  gameplayRect: LayoutRect = {
+    x: 0,
+    y: 118,
+    width: CANONICAL_WIDTH,
+    height: CANONICAL_HEIGHT - 118,
+  }
+  sideInset = 12
+  hudTop = 28
+  hudBottom = 108
   hudToBoardGap = 10
   shooterTop = 650
-  hud = {
-    level: { x: 16, y: 16, width: 72, height: 48 } as LayoutRect,
-    score: { x: 180, y: 16, width: 120, height: 44 } as LayoutRect,
-    moves: { x: 390, y: 16, width: 64, height: 44 } as LayoutRect,
-    pause: { x: 464, y: 18, width: 80, height: 32 } as LayoutRect,
+  hud: HudLayout = {
+    contentRect: { x: 24, y: 40, width: 512, height: 56 },
+    scoreRect: { x: 24, y: 40, width: 124, height: 56 },
+    actionRect: { x: 432, y: 47, width: 96, height: 44 },
+    dashboardRect: { x: 432, y: 47, width: 44, height: 44 },
+    pauseRect: { x: 484, y: 47, width: 44, height: 44 },
   }
-  fever = { x: 196, y: 628, width: 168, height: 24 } as LayoutRect
 
   constructor(
     width: number = CANONICAL_WIDTH,
@@ -58,58 +87,114 @@ export class Layout {
     this.LH = h
     this.safeTop = Math.max(8, Math.min(24, h * 0.025))
     this.safeBottom = h
-    this.sideInset = Math.max(3, Math.min(6, w * 0.012))
-    this.hudTop = this.safeTop
+    this.safeLeft = Math.max(12, Math.min(20, w * 0.03))
+    this.safeWidth = Math.max(1, w - this.safeLeft * 2)
+    this.sideInset = this.safeLeft
+    this.hudTop = this.safeTop + 8
+    const landscape = w > h
+    const uiBase = landscape
+      ? Math.max(34, Math.min(40, Math.min(w, h) * 0.09))
+      : Math.max(38, Math.min(42, Math.min(w, h) * 0.105))
+    const hudHeight = landscape
+      ? Math.max(42, Math.min(54, uiBase + 7))
+      : Math.max(55, Math.min(64, uiBase + 17))
+    const gameplayHudHeight = Math.max(76, Math.min(84, h * 0.095))
+    const gameplayGap = Math.max(8, Math.min(12, h * 0.012))
+    const gameplayTop = this.hudTop + gameplayHudHeight + gameplayGap
+    this.hudRect = {
+      x: this.safeLeft,
+      y: this.hudTop,
+      width: this.safeWidth,
+      height: hudHeight,
+    }
+    this.hudBottom = this.hudRect.y + this.hudRect.height
+    this.hudToBoardGap = gameplayTop - this.hudBottom
+
+    const contentPadding = Math.max(7, Math.min(10, this.hudRect.width * 0.035))
+    const contentRect: LayoutRect = {
+      x: this.hudRect.x + contentPadding,
+      y: this.hudRect.y + contentPadding,
+      width: Math.max(1, this.hudRect.width - contentPadding * 2),
+      height: Math.max(1, this.hudRect.height - contentPadding * 2),
+    }
+    const buttonSize = landscape
+      ? Math.max(30, Math.min(uiBase, h * 0.075))
+      : uiBase
+    const actionGap = Math.max(6, Math.min(8, contentRect.width * 0.03))
+    const actionWidth = buttonSize * 2 + actionGap
+    const scoreWidth = Math.min(136, Math.max(96, contentRect.width * 0.34))
+    const actionX = contentRect.x + contentRect.width - actionWidth
+    const centerY = this.hudRect.y + this.hudRect.height / 2
     this.hud = {
-      level: { x: this.sideInset, y: this.hudTop + 6, width: 72, height: 48 },
-      score: { x: w / 2 - 60, y: this.hudTop + 5, width: 120, height: 44 },
-      moves: {
-        x: w - this.sideInset - 64 - 44,
-        y: this.hudTop + 6,
-        width: 64,
-        height: 44,
+      contentRect,
+      scoreRect: {
+        x: contentRect.x,
+        y: contentRect.y,
+        width: scoreWidth,
+        height: contentRect.height,
       },
-      pause: {
-        x: w - this.sideInset - 36,
-        y: this.hudTop + 7,
-        width: 36,
-        height: 32,
+      actionRect: {
+        x: actionX,
+        y: centerY - buttonSize / 2,
+        width: actionWidth,
+        height: buttonSize,
+      },
+      dashboardRect: {
+        x: actionX,
+        y: centerY - buttonSize / 2,
+        width: buttonSize,
+        height: buttonSize,
+      },
+      pauseRect: {
+        x: actionX + buttonSize + actionGap,
+        y: centerY - buttonSize / 2,
+        width: buttonSize,
+        height: buttonSize,
       },
     }
-    this.hudBottom = this.hudTop + 54
-    // HUD is a floating overlay. Board placement is anchored to the safe top
-    // and a compact gameplay lead-in, so a future HUD visual cannot reserve a
-    // full horizontal band above the board.
-    this.BOARD_TOP = this.safeTop + 20
+    // Gameplay owns the full space below HUD. Board, danger and shooter are
+    // all derived from this rectangle so resize has one geometry truth.
+    this.gameplayRect = {
+      x: 0,
+      y: gameplayTop,
+      width: w,
+      height: Math.max(1, h - gameplayTop),
+    }
+    this.BOARD_TOP = this.gameplayRect.y
     this.hudToBoardGap = this.BOARD_TOP - this.hudBottom
-    const shooterHeight = Math.max(112, Math.min(150, h * 0.17))
-    this.shooterTop = h - shooterHeight
-    this.SHOOTER_Y = h - Math.max(52, shooterHeight * 0.42)
+    const shooterHeight = Math.max(
+      112,
+      Math.min(150, this.gameplayRect.height * 0.19),
+    )
+    this.shooterTop =
+      this.gameplayRect.y + this.gameplayRect.height - shooterHeight
+    this.SHOOTER_Y =
+      this.gameplayRect.y +
+      this.gameplayRect.height -
+      Math.max(52, shooterHeight * 0.42)
     this.SHOOTER_X = w / 2
     this.BOARD_CENTER_X = this.SHOOTER_X
     this.NEXT_X = Math.min(w - 44, this.SHOOTER_X + Math.min(92, w * 0.22))
     this.NEXT_Y = this.SHOOTER_Y + 4
-    const usableBoardWidth = w - this.sideInset * 2
-    this.R = usableBoardWidth / (this.COLS * 2)
-    this.BOARD_LEFT = this.sideInset
-    this.BOARD_RIGHT = w - this.sideInset
+    const widthLimitedRadius = (w - this.sideInset * 2) / (this.COLS * 2)
+    const heightLimitedRadius =
+      (this.shooterTop - this.gameplayRect.y) /
+      (MIN_DANGER_ROWS * Math.sqrt(3) + 1.5)
+    this.R = Math.max(6, Math.min(widthLimitedRadius, heightLimitedRadius))
+    const boardWidth = this.R * this.COLS * 2
+    this.BOARD_LEFT = Math.max(0, (w - boardWidth) / 2)
+    this.BOARD_RIGHT = this.BOARD_LEFT + boardWidth
     this.ROW_H = this.R * Math.sqrt(3)
     this.WALL_L = this.BOARD_LEFT
     this.WALL_R = this.BOARD_RIGHT
+    const dangerFromShooter = this.shooterTop - this.R * DANGER_TO_SHOOTER_TOP
+    const minimumDanger = this.BOARD_TOP + MIN_DANGER_ROWS * this.ROW_H
+    this.DANGER_Y = Math.max(minimumDanger, dangerFromShooter)
     this.DANGER_ROW = Math.max(
-      5,
-      Math.floor(
-        (this.shooterTop - this.BOARD_TOP - this.R * 1.5) / this.ROW_H,
-      ),
+      MIN_DANGER_ROWS,
+      Math.round((this.DANGER_Y - this.BOARD_TOP) / this.ROW_H),
     )
-    this.DANGER_Y = this.BOARD_TOP + this.DANGER_ROW * this.ROW_H
     this.BOARD_BOTTOM = Math.min(this.shooterTop, this.DANGER_Y)
-    this.fever = {
-      x: Math.max(12, this.SHOOTER_X - 84),
-      y: this.SHOOTER_Y - 86,
-      width: 168,
-      height: 24,
-    }
     this.MAX_ROWS = this.DANGER_ROW + 4
   }
 

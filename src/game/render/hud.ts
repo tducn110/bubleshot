@@ -1,348 +1,260 @@
 import {
   Container,
   Graphics,
-  NineSliceSprite,
   Rectangle,
   Sprite,
   Text,
   type TextStyleFontWeight,
-  type Texture,
 } from "pixi.js"
-import type { GameView } from "../types"
-import type { BubbleShooterEngine } from "../engine"
 import type { LayoutRect } from "../layout"
+import type { GameView } from "../types"
 import type { GameTextures } from "./textures"
+import { GAME_FONT_STACK } from "./typography"
 
-type Fill = string | { color: string alpha: number }
-
-function island(t: Texture, rect: LayoutRect): NineSliceSprite {
-  return new NineSliceSprite({
-    texture: t,
-    leftWidth: 14,
-    rightWidth: 14,
-    topHeight: 14,
-    bottomHeight: 14,
-    x: rect.x,
-    y: rect.y,
-    width: rect.width,
-    height: rect.height,
-  })
+export interface HudActions {
+  /** Notify the application shell that the player requested the dashboard. */
+  requestDashboard: () => void
+  /** Ask the game owner to toggle the current pause state. */
+  requestPause: () => void
+  /** Prevent the canvas gameplay pointer listener from handling this UI tap. */
+  consumePointerDown: () => void
 }
 
-function label(
-  text: string,
-  family: string,
+export interface HudDebugMetrics {
+  readonly hud: LayoutRect
+  readonly scoreLabelFontSize: number
+  readonly scoreValueFontSize: number
+  readonly trophyButton: LayoutRect
+  readonly pauseButton: LayoutRect
+  readonly trophyIcon: LayoutRect
+  readonly pauseIcon: LayoutRect
+  readonly horizontalPadding: number
+  readonly verticalPadding: number
+  readonly scoreToButtonsGap: number
+  readonly buttonsGap: number
+  readonly bubbleDiameter: number
+}
+
+function makeText(
+  value: string,
   size: number,
   weight: number,
-  fill: Fill,
-  x: number,
-  y: number,
-  align: 0 | 0.5 | 1 = 0,
-): Text {
-  const result = new Text({
-    text,
+  fill: string,
+  anchor: 0 | 0.5 = 0,
+) {
+  return new Text({
+    text: value,
     style: {
-      fontFamily: family,
-      fontWeight: weight as unknown as TextStyleFontWeight,
+      fontFamily: GAME_FONT_STACK,
       fontSize: size,
+      fontWeight: weight as unknown as TextStyleFontWeight,
       fill,
-      textBaseline: "middle",
+      letterSpacing: 0.4,
+      dropShadow: {
+        color: "#061946",
+        alpha: 0.86,
+        blur: 2,
+        distance: 1,
+        angle: Math.PI / 2,
+      },
     },
-    anchor: { x: align, y: 0.5 },
+    anchor: { x: anchor, y: 0.5 },
   })
-  result.position.set(x, y)
-  return result
 }
 
-const PRESSURE_DOTS = 4
+interface ActionButtonVisual {
+  button: Container
+  background: Graphics
+  icon: Sprite
+}
+
+function makeActionButton(
+  label: string,
+  iconTexture: GameTextures["icons"][keyof GameTextures["icons"]],
+): ActionButtonVisual {
+  const button = new Container({ label })
+  const background = new Graphics()
+  const icon = new Sprite({ texture: iconTexture, anchor: 0.5 })
+  background.label = `${label}Background`
+  icon.label = `${label}Icon`
+  button.addChild(background, icon)
+  button.eventMode = "static"
+  button.cursor = "pointer"
+  return { button, background, icon }
+}
+
+function drawActionButton(
+  visual: ActionButtonVisual,
+  rect: LayoutRect,
+  iconSize: number,
+) {
+  const radius = Math.min(rect.width, rect.height) / 2
+  visual.button.position.set(rect.x + rect.width / 2, rect.y + rect.height / 2)
+  visual.background
+    .clear()
+    .circle(0, 0, radius)
+    .fill({ color: 0x116da3, alpha: 0.96 })
+  visual.button.hitArea = new Rectangle(
+    -radius - 7,
+    -radius - 7,
+    (radius + 7) * 2,
+    (radius + 7) * 2,
+  )
+  visual.icon.width = iconSize
+  visual.icon.height = iconSize
+  visual.icon.position.set(0, 0)
+}
 
 export class HudLayer {
-  private root = new Container()
-  private levelPanel: NineSliceSprite
-  private movesPanel: NineSliceSprite
-  private levelVal: Text
-  private scoreLabel: Text
-  private scoreVal: Text
-  private movesLabel: Text
-  private movesVal: Text
-  private pausePill: Sprite
-  private pauseLabel: Text
-  private dots: Sprite[] = []
-  private combo: Text
-  private feverBg: Graphics
-  private feverFill: Graphics
-  private feverLabel: Text
-  private mode: Text
-  private last = {
-    stage: -1,
-    score: "",
-    moves: "",
-    movesColor: "",
-    remaining: -1,
-    combo: -1,
-    fever: -1,
-    mode: -1,
-  }
+  readonly root = new Container({ label: "HudLayer" })
+  private readonly panel = new Container({ label: "HudPanel" })
+  private readonly backgroundFill = new Graphics()
+  private readonly backgroundBorder = new Graphics()
+  private readonly content = new Container({ label: "Content" })
+  private readonly scoreRegion = new Container({ label: "ScoreRegion" })
+  private readonly actionRegion = new Container({ label: "ActionRegion" })
+  private readonly scoreLabel = makeText("ĐIỂM", 10, 900, "#e8fbff")
+  private readonly scoreValue = makeText("0", 22, 900, "#ffffff")
+  private readonly dashboard: ActionButtonVisual
+  private readonly pause: ActionButtonVisual
+  private lastScore = ""
+  private suppressed = false
 
   constructor(
     parent: Container,
-    _t: GameTextures,
-    private engine: BubbleShooterEngine,
+    textures: GameTextures,
+    private readonly actions: HudActions,
   ) {
+    this.root.zIndex = 10
+    this.dashboard = makeActionButton("DashboardButton", textures.icons.trophy)
+    this.pause = makeActionButton("PauseButton", textures.icons.pause)
+    this.backgroundFill.label = "BackgroundFill"
+    this.backgroundBorder.label = "BackgroundBorder"
+    this.scoreLabel.label = "ScoreLabel"
+    this.scoreValue.label = "ScoreValue"
     parent.addChild(this.root)
-    this.combo = this.makeCombo()
-  }
+    this.root.addChild(this.panel)
+    this.panel.addChild(
+      this.backgroundFill,
+      this.backgroundBorder,
+      this.content,
+    )
+    this.content.addChild(this.scoreRegion, this.actionRegion)
+    this.scoreRegion.addChild(this.scoreLabel, this.scoreValue)
+    this.actionRegion.addChild(this.dashboard.button, this.pause.button)
 
-  private makeCombo(): Text {
-    return new Text({
-      text: "",
-      style: {
-        fontFamily: "Bungee",
-        fontWeight: "900",
-        fontSize: 30,
-        fill: { color: "#ffdd6e", alpha: 0.96 },
-        dropShadow: {
-          color: "#000000",
-          blur: 12,
-          distance: 2,
-          angle: Math.PI / 2,
-        },
-        textBaseline: "middle",
-      },
-      anchor: { x: 0.5, y: 0.5 },
+    this.dashboard.button.on("pointerdown", () => {
+      this.actions.consumePointerDown()
+    })
+    this.dashboard.button.on("pointertap", () => {
+      this.actions.requestDashboard()
+    })
+    this.pause.button.on("pointerdown", () => {
+      this.actions.consumePointerDown()
+      this.actions.requestPause()
     })
   }
 
-  relayout(v: GameView, t: GameTextures) {
-    for (const child of this.root.removeChildren()) child.destroy()
-    this.combo = this.makeCombo()
-    const l = v.layout
-    const level = l.hud.level
-    const score = l.hud.score
-    const moves = l.hud.moves
-    const pause = l.hud.pause
-    const centerX = l.LW / 2
+  relayout(view: GameView) {
+    const l = view.layout
+    const panel = l.hudRect
+    const hud = l.hud
+    const radius = Math.max(16, Math.min(18, panel.height * 0.28))
 
-    this.levelPanel = island(t.panel, level)
-    this.levelVal = label(
-      String(v.stage).padStart(2, "0"),
-      "Bungee",
-      21,
-      900,
-      "#ffcf43",
-      level.x + level.width / 2,
-      level.y + 29,
-      0.5,
-    )
-    this.scoreLabel = label(
-      "SCORE",
-      "Outfit",
+    this.backgroundFill
+      .clear()
+      .roundRect(panel.x, panel.y, panel.width, panel.height, radius)
+      .fill({ color: 0x1c2e83, alpha: 0.9 })
+    this.backgroundBorder
+      .clear()
+      .roundRect(panel.x, panel.y, panel.width, panel.height, radius)
+      .stroke({ color: 0xb5d7ff, alpha: 0.34, width: 1 })
+
+    const scoreFontSize = Math.max(18, Math.min(24, hud.scoreRect.width * 0.24))
+    this.scoreLabel.style.fontSize = Math.max(
       10,
-      800,
-      { color: "#e8fbff", alpha: 0.72 },
-      centerX,
-      score.y + 10,
-      0.5,
+      Math.min(12, hud.scoreRect.width * 0.1),
     )
-    this.scoreVal = label(
-      "0",
-      "Bungee",
-      22,
-      900,
-      "#ffffff",
-      centerX,
-      score.y + 32,
-      0.5,
+    this.scoreValue.style.fontSize = scoreFontSize
+    this.scoreLabel.position.set(
+      hud.scoreRect.x,
+      hud.scoreRect.y + hud.scoreRect.height * 0.25,
     )
-    this.movesPanel = island(t.panel, moves)
-    this.movesLabel = label(
-      "MOVES",
-      "Outfit",
-      9,
-      800,
-      { color: "#e8fbff", alpha: 0.72 },
-      moves.x + 10,
-      moves.y + 12,
+    this.scoreValue.position.set(
+      hud.scoreRect.x,
+      hud.scoreRect.y + hud.scoreRect.height * 0.73,
     )
-    this.movesVal = label(
-      String(v.moves).padStart(2, "0"),
-      "Bungee",
-      19,
-      900,
-      "#ffffff",
-      moves.x + 10,
-      moves.y + 31,
+    this.fitScoreValue(hud.scoreRect.width)
+
+    drawActionButton(
+      this.dashboard,
+      hud.dashboardRect,
+      Math.min(hud.dashboardRect.width, hud.dashboardRect.height) * 0.56,
+    )
+    drawActionButton(
+      this.pause,
+      hud.pauseRect,
+      Math.min(hud.pauseRect.width, hud.pauseRect.height) * 0.38,
     )
 
-    this.dots = []
-    for (let i = 0; i < PRESSURE_DOTS; i++) {
-      const dot = new Sprite({
-        texture: t.dot,
-        anchor: 0.5,
-        alpha: 0.2,
-        scale: 0.22,
-      })
-      dot.position.set(
-        moves.x + moves.width - 13 - (PRESSURE_DOTS - 1 - i) * 10,
-        moves.y + 29,
-      )
-      this.dots.push(dot)
+    this.lastScore = ""
+  }
+
+  sync(view: GameView) {
+    const score = view.score.toLocaleString()
+    if (score !== this.lastScore) {
+      this.scoreValue.text = score
+      this.fitScoreValue(view.layout.hud.scoreRect.width)
+      this.lastScore = score
     }
+  }
 
-    this.pausePill = new Sprite({
-      texture: t.pause,
-      x: pause.x,
-      y: pause.y,
-      width: pause.width,
-      height: pause.height,
-    })
-    this.pausePill.eventMode = "static"
-    this.pausePill.hitArea = new Rectangle(
-      -6,
-      -6,
-      pause.width + 12,
-      pause.height + 12,
-    )
-    this.pausePill.cursor = "pointer"
-    this.pausePill.on("pointerdown", () => {
-      this.engine.consumeNextDown()
-      this.engine.togglePause()
-    })
-    this.pauseLabel = label(
-      "Ⅱ",
-      "Outfit",
-      14,
-      900,
-      "#ffffff",
-      pause.x + pause.width / 2,
-      pause.y + pause.height / 2,
-      0.5,
-    )
+  /** Keep the leaderboard header free from the gameplay HUD underneath it. */
+  setSuppressed(suppressed: boolean) {
+    if (this.suppressed === suppressed) return
+    this.suppressed = suppressed
+    this.root.visible = !suppressed
+  }
 
-    const fever = l.fever
-    this.feverBg = new Graphics()
-      .roundRect(fever.x, fever.y, fever.width, 8, 4)
-      .fill({ color: 0x0a4f78, alpha: 0.72 })
-    this.feverFill = new Graphics()
-    this.feverLabel = label(
-      "FEVER",
-      "Outfit",
-      8,
-      900,
-      { color: "#fff5bd", alpha: 0.9 },
-      fever.x - 8,
-      fever.y + 4,
+  debugMetrics(view: GameView): HudDebugMetrics {
+    const l = view.layout
+    const hud = l.hud
+    const trophyIconBounds = this.dashboard.icon.getLocalBounds()
+    const pauseIconBounds = this.pause.icon.getLocalBounds()
+
+    return {
+      hud: { ...l.hudRect },
+      scoreLabelFontSize: Number(this.scoreLabel.style.fontSize),
+      scoreValueFontSize: Number(this.scoreValue.style.fontSize),
+      trophyButton: { ...hud.dashboardRect },
+      pauseButton: { ...hud.pauseRect },
+      trophyIcon: {
+        x: trophyIconBounds.x,
+        y: trophyIconBounds.y,
+        width: trophyIconBounds.width,
+        height: trophyIconBounds.height,
+      },
+      pauseIcon: {
+        x: pauseIconBounds.x,
+        y: pauseIconBounds.y,
+        width: pauseIconBounds.width,
+        height: pauseIconBounds.height,
+      },
+      horizontalPadding: hud.contentRect.x - l.hudRect.x,
+      verticalPadding: hud.contentRect.y - l.hudRect.y,
+      scoreToButtonsGap:
+        hud.dashboardRect.x - (hud.scoreRect.x + hud.scoreRect.width),
+      buttonsGap:
+        hud.pauseRect.x - (hud.dashboardRect.x + hud.dashboardRect.width),
+      bubbleDiameter: l.R * 2,
+    }
+  }
+
+  private fitScoreValue(maxWidth: number) {
+    const localWidth = this.scoreValue.getLocalBounds().width
+    this.scoreValue.scale.set(
+      localWidth > 0 ? Math.min(1, Math.max(0, maxWidth / localWidth)) : 1,
       1,
     )
-    this.mode = label(
-      "x1",
-      "Bungee",
-      13,
-      900,
-      "#ffffff",
-      fever.x + fever.width + 8,
-      fever.y + 4,
-    )
-
-    this.root.addChild(
-      this.levelPanel,
-      label(
-        "LEVEL",
-        "Outfit",
-        9,
-        800,
-        { color: "#e0f9ff", alpha: 0.72 },
-        level.x + level.width / 2,
-        level.y + 11,
-        0.5,
-      ),
-      this.levelVal,
-      this.scoreLabel,
-      this.scoreVal,
-      this.movesPanel,
-      this.movesLabel,
-      this.movesVal,
-      ...this.dots,
-      this.pausePill,
-      this.pauseLabel,
-      this.feverBg,
-      this.feverFill,
-      this.feverLabel,
-      this.mode,
-      this.combo,
-    )
-    this.last = {
-      stage: -1,
-      score: "",
-      moves: "",
-      movesColor: "",
-      remaining: -1,
-      combo: -1,
-      fever: -1,
-      mode: -1,
-    }
-  }
-
-  sync(v: GameView, _t: GameTextures) {
-    if (v.stage !== this.last.stage) {
-      this.levelVal.text = String(v.stage).padStart(2, "0")
-      this.last.stage = v.stage
-    }
-    const score = v.score.toLocaleString()
-    if (score !== this.last.score) {
-      this.scoreVal.text = score
-      this.last.score = score
-    }
-    const moves = String(v.moves).padStart(2, "0")
-    if (moves !== this.last.moves) {
-      this.movesVal.text = moves
-      this.last.moves = moves
-    }
-    const movesColor = v.moves < 7 ? "#ff7188" : "#ffffff"
-    if (movesColor !== this.last.movesColor) {
-      this.movesVal.style.fill = movesColor
-      this.last.movesColor = movesColor
-    }
-    const remaining = Math.max(0, v.rowRemaining)
-    if (remaining !== this.last.remaining) {
-      this.last.remaining = remaining
-      const lit = Math.max(0, v.rowEvery - remaining)
-      const urgent = remaining <= 2
-      for (let i = 0; i < this.dots.length; i++) {
-        this.dots[i].alpha = i < lit ? 1 : 0.2
-        this.dots[i].tint =
-          i < lit ? (urgent ? "#ff4d6d" : "#ffcb3d") : "#ffffff"
-      }
-    }
-    const combo = Math.max(1, v.combo)
-    if (combo !== this.last.combo) this.last.combo = combo
-    const comboA = v.fx.comboA
-    this.combo.text = `COMBO x${combo}`
-    this.combo.visible = comboA.alpha > 0 && combo >= 2
-    if (comboA.alpha > 0) {
-      this.combo.position.set(comboA.x, comboA.y)
-      this.combo.alpha = comboA.alpha
-      this.combo.scale.set(1 + (1 - comboA.alpha) * 0.25)
-    }
-
-    if (v.feverProgress !== this.last.fever) {
-      this.last.fever = v.feverProgress
-      const fever = v.layout.fever
-      this.feverFill
-        .clear()
-        .roundRect(
-          fever.x,
-          fever.y,
-          fever.width * (v.feverActive ? 1 : v.feverProgress),
-          8,
-          4,
-        )
-        .fill({ color: v.feverActive ? 0xffe038 : 0x40e9ff, alpha: 0.96 })
-    }
-    if (v.shotMode !== this.last.mode || v.feverActive) {
-      this.last.mode = v.shotMode
-      this.mode.text = v.feverActive ? `x${v.shotMode} FEVER` : `x${v.shotMode}`
-      this.mode.style.fill = v.feverActive ? "#ffe038" : "#ffffff"
-    }
   }
 }

@@ -8,7 +8,7 @@ export class BubbleVisual extends Container {
   private colorKey: string | number | null = null
 
   constructor(t: GameTextures) {
-    super()
+    super({ label: "Bubble" })
     this.colorLayer = new Sprite({ texture: t.colorBase, anchor: 0.5 })
     this.glossLayer = new Sprite({
       texture: t.glossOverlay,

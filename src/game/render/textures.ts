@@ -1,5 +1,7 @@
 import { Assets, Texture } from "pixi.js"
 import type { Layout } from "../layout"
+import { loadLucideIconTextures, type PixiIconName } from "./icons"
+import { GAME_FONT_STACK } from "./typography"
 
 // bubble.webp is a 256px square neutral lighting/gloss overlay.
 export const TEX_BR = 128
@@ -42,7 +44,7 @@ function roundRectTexture(
   h: number,
   r: number,
   fill: string,
-  stroke?: { color: string width: number },
+  stroke?: { color: string; width: number },
 ): Texture {
   const [cv, g] = canvas(w, h)
   rr(g, 0.5, 0.5, w - 1, h - 1, r)
@@ -97,18 +99,22 @@ export class GameTextures {
   readonly trajDot: Texture
   readonly dot: Texture
   readonly panel: Texture
-  readonly pause: Texture
   readonly pill: Texture
   readonly pillTop: Texture
   readonly card: Texture
   readonly cardRed: Texture
   readonly dangerLabel: Texture
   readonly dim: Texture
-  readonly dimSoft: Texture
+  readonly icons: Readonly<Record<PixiIconName, Texture>>
 
-  private constructor(glossOverlay: Texture, background: Texture) {
+  private constructor(
+    glossOverlay: Texture,
+    background: Texture,
+    icons: Readonly<Record<PixiIconName, Texture>>,
+  ) {
     this.glossOverlay = glossOverlay
     this.background = background
+    this.icons = icons
     this.colorBase = bubbleColorTexture(256)
     this.whiteDot = dotTexture(32, DOT_R)
     this.trajDot = dotTexture(24, TRAJ_R)
@@ -117,38 +123,36 @@ export class GameTextures {
       color: "rgba(255,255,255,.42)",
       width: 1,
     })
-    this.pause = roundRectTexture(80, 32, 16, "rgba(8,91,142,.50)", {
-      color: "rgba(255,255,255,.44)",
-      width: 1,
-    })
     this.pill = roundRectTexture(36, 36, 18, "#FFFFFF")
     this.pillTop = pillTopTexture()
-    this.card = roundRectTexture(48, 48, 18, "rgba(15,30,90,.95)", {
+    // Modal cards must fully occlude gameplay. A translucent centre lets a
+    // bubble or particle behind the lose/win dialog bleed through the copy.
+    this.card = roundRectTexture(48, 48, 18, "rgba(15,30,90,1)", {
       color: "rgba(100,140,255,.4)",
       width: 2,
     })
-    this.cardRed = roundRectTexture(48, 48, 18, "rgba(15,30,90,.95)", {
+    this.cardRed = roundRectTexture(48, 48, 18, "rgba(15,30,90,1)", {
       color: "rgba(255,80,80,.4)",
       width: 2,
     })
     this.dangerLabel = textTexture(
       "DANGER",
-      "900 12px Outfit, sans-serif",
+      `900 12px ${GAME_FONT_STACK}`,
       "#E95574",
       90,
       18,
     )
     this.dim = roundRectTexture(8, 8, 0, "rgba(5,12,38,.88)")
-    this.dimSoft = roundRectTexture(8, 8, 0, "rgba(5,12,38,.82)")
   }
 
   static async create(): Promise<GameTextures> {
     try {
-      const [bubbleBase, background] = await Promise.all([
+      const [bubbleBase, background, icons] = await Promise.all([
         Assets.load<Texture>("/bubble.webp"),
         Assets.load<Texture>("/background.webp"),
+        loadLucideIconTextures(),
       ])
-      return new GameTextures(bubbleBase, background)
+      return new GameTextures(bubbleBase, background, icons)
     } catch (error) {
       throw new Error(
         `Unable to load Bubble Shooter core textures: ${String(error)}`,
@@ -166,14 +170,13 @@ export class GameTextures {
       this.trajDot,
       this.dot,
       this.panel,
-      this.pause,
       this.pill,
       this.pillTop,
       this.card,
       this.cardRed,
       this.dangerLabel,
       this.dim,
-      this.dimSoft,
+      ...Object.values(this.icons),
     ]
   }
 
@@ -184,14 +187,12 @@ export class GameTextures {
       this.trajDot,
       this.dot,
       this.panel,
-      this.pause,
       this.pill,
       this.pillTop,
       this.card,
       this.cardRed,
       this.dangerLabel,
       this.dim,
-      this.dimSoft,
     ]) {
       t.destroy(true)
     }

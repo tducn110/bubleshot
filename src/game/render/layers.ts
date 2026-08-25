@@ -19,6 +19,7 @@ import {
   makeDangerLineTexture,
   type GameTextures,
 } from "./textures"
+import { GAME_FONT_STACK } from "./typography"
 
 const DEBUG_LAYOUT =
   import.meta.env.DEV &&
@@ -33,9 +34,9 @@ interface BoardShiftMotion {
 
 function popupStyle(big: boolean, color: string): TextStyleOptions {
   return {
-    fontFamily: big ? "Bungee" : "Outfit",
+    fontFamily: GAME_FONT_STACK,
     fontWeight: "900",
-    fontSize: big ? 38 : 20,
+    fontSize: big ? 34 : 20,
     fill: color,
     stroke: { color: 0x134872, width: big ? 5 : 3, alpha: 0.48 },
     dropShadow: { color, blur: 12, distance: 0, alpha: 1 },
@@ -55,7 +56,7 @@ class CannonContainer extends Container {
   private readonly nextLabel = new Text({
     text: "NEXT",
     style: {
-      fontFamily: "Outfit",
+      fontFamily: GAME_FONT_STACK,
       fontSize: 9,
       fontWeight: "800",
       fill: "#ffffff",
@@ -65,7 +66,7 @@ class CannonContainer extends Container {
   })
 
   constructor(t: GameTextures) {
-    super()
+    super({ label: "Cannon" })
     this.loadedBubble = new BubbleVisual(t)
     this.nextBubble = new BubbleVisual(t)
     this.addChild(
@@ -136,13 +137,13 @@ class CannonContainer extends Container {
 
 export class SceneLayers {
   private bg: Sprite
-  private wallGuides = new Graphics()
-  private trajectory = new Graphics()
+  private wallGuides = new Graphics({ label: "WallGuides" })
+  private trajectory = new Graphics({ label: "Trajectory" })
   private dangerLine: Sprite
   private dangerLabel: Sprite
-  private boardLayer = new Container()
-  private fxLayer = new Container()
-  private shotLayer = new Container()
+  private boardLayer = new Container({ label: "BoardLayer" })
+  private fxLayer = new Container({ label: "FxLayer" })
+  private shotLayer = new Container({ label: "ShotLayer" })
   private boardSprites = new Map<number, BubbleVisual>()
   private boardColors = new Map<number, number>()
   private boardPool: BubblePool
@@ -183,10 +184,10 @@ export class SceneLayers {
       kind: AnimationKind,
     ) => void,
   ) {
-    this.bg = new Sprite()
+    this.bg = new Sprite({ label: "Background" })
     this.bg.anchor.set(0.5)
-    this.dangerLine = new Sprite()
-    this.dangerLabel = new Sprite({ texture: t.dangerLabel, anchor: 0.5 })
+    this.dangerLine = new Sprite({ label: "DangerLine" })
+    this.dangerLabel = new Sprite({ texture: t.dangerLabel, anchor: 0.5, label: "DangerLabel" })
     parent.addChild(
       this.bg,
       this.wallGuides,
@@ -290,27 +291,14 @@ export class SceneLayers {
         .rect(0, 0, l.LW, l.LH)
         .stroke({ color: 0x22ddff, alpha: 0.5, width: 1 })
       this.debugLayout
-        .rect(
-          l.hud.level.x,
-          l.hud.level.y,
-          l.hud.level.width,
-          l.hud.level.height,
-        )
+        .rect(l.hudRect.x, l.hudRect.y, l.hudRect.width, l.hudRect.height)
         .stroke({ color: 0xffcc33, alpha: 0.8, width: 1 })
       this.debugLayout
         .rect(
-          l.hud.moves.x,
-          l.hud.moves.y,
-          l.hud.moves.width,
-          l.hud.moves.height,
-        )
-        .stroke({ color: 0xffcc33, alpha: 0.8, width: 1 })
-      this.debugLayout
-        .rect(
-          l.BOARD_LEFT,
-          l.BOARD_TOP,
-          l.BOARD_RIGHT - l.BOARD_LEFT,
-          l.BOARD_BOTTOM - l.BOARD_TOP,
+          l.gameplayRect.x,
+          l.gameplayRect.y,
+          l.gameplayRect.width,
+          l.gameplayRect.height,
         )
         .stroke({ color: 0x44ff88, alpha: 0.8, width: 1 })
       this.debugLayout

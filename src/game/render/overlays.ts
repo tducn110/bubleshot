@@ -1,15 +1,20 @@
 import {
   Container,
+  Graphics,
   NineSliceSprite,
   Rectangle,
   Sprite,
   Text,
+  type Texture,
   type TextStyleFontWeight,
 } from "pixi.js"
 import type { GameView } from "../types"
 import type { BubbleShooterEngine } from "../engine"
 import type { GameTextures } from "./textures"
-import { showInterstitial } from "../../integrations/ads/googleH5Ads"
+import { GameSettingsStore } from "../settings"
+import { LeaderboardOverlay } from "./leaderboardOverlay"
+import { PauseOverlay } from "./pauseOverlay"
+import { GAME_FONT_STACK } from "./typography"
 
 function card(
   t: GameTextures,
@@ -33,12 +38,16 @@ function title(text: string, size: number, color: string, y: number): Text {
   const t = new Text({
     text,
     style: {
-      fontFamily: "Outfit",
-      fontWeight: "700",
+      fontFamily: GAME_FONT_STACK,
+      fontWeight: "800",
       fontSize: size,
       fill: color,
-      dropShadow: { color, blur: 16, distance: 0, alpha: 1 },
-      textBaseline: "middle",
+      // Pixi's blurred drop shadow can rasterize Vietnamese combining marks
+      // as stray dark pixels above the title. A tight stroke keeps the title
+      // readable without producing artefacts on the loss dialog.
+      stroke: { color: "#061946", width: 1 },
+      // Keep the canvas baseline at Pixi's font default. Combining this with
+      // anchor.y = 0.5 was clipping the lower edge of Vietnamese glyphs.
     },
     anchor: 0.5,
   })
@@ -56,11 +65,10 @@ function line(
   const t = new Text({
     text,
     style: {
-      fontFamily: "Outfit",
+      fontFamily: GAME_FONT_STACK,
       fontWeight: weight as unknown as TextStyleFontWeight,
       fontSize: size,
       fill,
-      textBaseline: "middle",
     },
     anchor: 0.5,
   })
@@ -77,6 +85,7 @@ function button(
   labelText: string,
   color: string,
   onTap: () => void,
+  iconTexture?: Texture,
 ): Container {
   const c = new Container()
   const base = new NineSliceSprite({
@@ -105,16 +114,28 @@ function button(
   const txt = new Text({
     text: labelText,
     style: {
-      fontFamily: "Outfit",
+      fontFamily: GAME_FONT_STACK,
       fontWeight: "800",
       fontSize: 13,
       fill: "#FFFFFF",
-      textBaseline: "middle",
     },
     anchor: 0.5,
   })
-  txt.position.set(0, h / 2 + 3)
-  c.addChild(base, top, txt)
+  const icon = iconTexture
+    ? new Sprite({ texture: iconTexture, anchor: 0.5, label: "ButtonIcon" })
+    : null
+  // The button container is positioned by its centre. Keeping the label at
+  // local y=0 prevents it from sinking below the pill's visible surface.
+  if (icon) {
+    icon.width = 17
+    icon.height = 17
+    icon.position.set(-w * 0.24, 0)
+    txt.position.set(w * 0.13, 0)
+    c.addChild(base, top, icon, txt)
+  } else {
+    txt.position.set(0, 0)
+    c.addChild(base, top, txt)
+  }
   c.position.set(x, y)
   c.eventMode = "static"
   c.hitArea = new Rectangle(-w / 2, -h / 2, w, h)
@@ -122,7 +143,7 @@ function button(
   c.on("pointertap", onTap)
   c.on("pointerover", () => {
     base.tint = "#FFFFFF"
-    txt.style.fill = "#0b2c52"
+    txt.style.fill = "#ffffff"
   })
   c.on("pointerout", () => {
     base.tint = color
@@ -132,131 +153,178 @@ function button(
 }
 
 export class OverlaysLayer {
-  private root = new Container()
+  private root = new Container({
+    label: "OverlaysLayer",
+    sortableChildren: true,
+  })
   private win: Container = new Container()
   private lose: Container = new Container()
-  private pause: Container = new Container()
-  private winScore: Text
-  private winRank: Text
-  private loseScore: Text
+  private readonly pauseOverlay: PauseOverlay
+  private readonly leaderboard: LeaderboardOverlay
+  private winScore: Text = new Text()
+  private winRank: Text = new Text()
+  private loseScore: Text = new Text()
+  private winDim: Graphics | null = null
+  private loseDim: Graphics | null = null
+  private winCard: NineSliceSprite | null = null
+  private loseCard: NineSliceSprite | null = null
+  private winBox: Container | null = null
+  private loseBox: Container | null = null
+  private endOverlaysBuilt = false
   private lastWinScore = ""
   private lastRank = ""
   private lastLoseScore = ""
   private transitionPending = false
+  private leaderboardPausedGame = false
+  private leaderboardWasPaused = false
 
   constructor(
     parent: Container,
-    t: GameTextures,
+    textures: GameTextures,
     private engine: BubbleShooterEngine,
+    settings: GameSettingsStore,
+    consumePointerDown: () => void,
   ) {
+    this.root.zIndex = 20
     parent.addChild(this.root)
+    this.pauseOverlay = new PauseOverlay(
+      this.root,
+      textures,
+      engine,
+      settings,
+      consumePointerDown,
+    )
+    this.leaderboard = new LeaderboardOverlay(
+      this.root,
+      textures,
+      consumePointerDown,
+      () => this.closeLeaderboard(),
+    )
   }
 
-  private runTransition(name: string, action: () => void): void {
+  openLeaderboard() {
+    if (this.leaderboard.isOpen) return
+    this.leaderboardWasPaused = this.engine.phase === "PAUSED"
+    this.leaderboardPausedGame = false
+    if (!this.leaderboardWasPaused) {
+      this.engine.togglePause()
+      this.leaderboardPausedGame = this.engine.phase === "PAUSED"
+    }
+    this.pauseOverlay.setSuppressed(true)
+    this.leaderboard.open()
+  }
+
+  closeLeaderboard() {
+    if (!this.leaderboard.isOpen) return
+    this.leaderboard.close()
+    this.pauseOverlay.setSuppressed(false)
+    if (this.leaderboardPausedGame && this.engine.phase === "PAUSED") {
+      this.engine.resume()
+    }
+    this.leaderboardPausedGame = false
+    this.leaderboardWasPaused = false
+  }
+
+  get leaderboardOpen() {
+    return this.leaderboard.isOpen
+  }
+
+  dispose() {
+    this.leaderboard.dispose()
+  }
+
+  private runTransition(_name: string, action: () => void): void {
     if (this.transitionPending) return
     this.transitionPending = true
-    void showInterstitial({ type: "next", name }).finally(() => {
+    // Ads are temporarily disabled while the core game flow is being tuned.
+    // Keep the guard so a future ad hook cannot double-trigger the action.
+    try {
       action()
+    } finally {
       this.transitionPending = false
-    })
+    }
   }
 
   relayout(v: GameView, t: GameTextures) {
-    for (const c of this.root.removeChildren()) c.destroy()
+    if (!this.endOverlaysBuilt) this.buildEndOverlays(t)
     const l = v.layout
     const cx = l.LW / 2
     const cy = l.LH / 2
+    this.pauseOverlay.relayout(v)
+    this.leaderboard.relayout(v)
+    this.drawScrim(this.winDim, l.LW, l.LH)
+    this.drawScrim(this.loseDim, l.LW, l.LH)
+    this.winCard!.position.set(cx, cy)
+    this.loseCard!.position.set(cx, cy)
+    this.winBox!.position.set(cx, cy)
+    this.loseBox!.position.set(cx, cy)
+    this.win.hitArea = new Rectangle(0, 0, l.LW, l.LH)
+    this.lose.hitArea = new Rectangle(0, 0, l.LW, l.LH)
+  }
 
-    this.win = new Container()
-    const dimW = new Sprite({
-      texture: t.dim,
-      width: l.LW,
-      height: l.LH,
-      eventMode: "none",
-    })
-    this.win.addChild(dimW)
-    const winCard = card(t, 280, 240, false)
-    winCard.position.set(cx, cy)
-    const winBox = new Container()
-    winBox.position.set(cx, cy)
-    winBox.addChild(title("LEVEL CLEAR!", 30, "#FFE04B", -82))
+  private drawScrim(scrim: Graphics | null, width: number, height: number) {
+    scrim
+      ?.clear()
+      .rect(0, 0, width, height)
+      .fill({ color: 0x050c26, alpha: 0.78 })
+  }
+
+  private buildEndOverlays(t: GameTextures) {
+    this.win = new Container({ label: "WinOverlay" })
+    this.winDim = new Graphics({ label: "WinScrim", eventMode: "none" })
+    this.winCard = card(t, 280, 240, false)
+    this.winBox = new Container({ label: "WinDialog" })
     this.winRank = line("RANK 0 / 3", 12, 800, "rgba(197,235,255,.75)", -40)
     this.winScore = line("0", 26, 700, "#FFFFFF", 40)
-    winBox.addChild(
+    this.winBox.addChild(
+      title("LEVEL CLEAR!", 30, "#FFE04B", -82),
       this.winRank,
-      line("SCORE", 12, 400, "rgba(180,200,255,.6)", 10),
+      line("ĐIỂM", 12, 500, "rgba(180,200,255,.72)", 10),
       this.winScore,
-      button(t, -40, 78, 68, 36, "RETRY", "#E94560", () =>
+      button(t, -40, 78, 68, 36, "LẠI", "#E94560", () =>
         this.runTransition("retry_stage", () => this.engine.retry()),
       ),
-      button(t, 40, 78, 68, 36, "NEXT", "#2DC653", () =>
+      button(t, 40, 78, 68, 36, "TIẾP", "#2DC653", () =>
         this.runTransition("next_stage", () => this.engine.nextStage()),
       ),
     )
-    this.win.addChild(winCard, winBox)
-    this.win.visible = false
-    this.win.position.set(0, 0)
+    this.win.addChild(this.winDim, this.winCard, this.winBox)
 
-    this.lose = new Container()
-    const dimL = new Sprite({
-      texture: t.dim,
-      width: l.LW,
-      height: l.LH,
-      eventMode: "none",
-    })
-    this.lose.addChild(dimL)
-    const loseCard = card(t, 260, 220, true)
-    loseCard.position.set(cx, cy)
-    const loseBox = new Container()
-    loseBox.position.set(cx, cy)
-    this.loseScore = line("0", 26, 700, "#FFFFFF", 4)
-    loseBox.addChild(
-      title("GAME OVER", 28, "#FF4D6D", -72),
-      line("SCORE", 12, 400, "rgba(180,200,255,.6)", -30),
+    this.lose = new Container({ label: "LoseOverlay" })
+    this.loseDim = new Graphics({ label: "LoseScrim", eventMode: "none" })
+    this.loseCard = card(t, 292, 260, true)
+    this.loseBox = new Container({ label: "LoseDialog" })
+    this.loseScore = line("0", 26, 700, "#FFFFFF", 6)
+    this.loseBox.addChild(
+      title("BẠN ĐÃ THUA RỒI", 22, "#FF4D6D", -88),
+      line("ĐIỂM", 12, 700, "#dff7ff", -35),
       this.loseScore,
-      button(t, -38, 46, 64, 36, "RETRY", "#E94560", () =>
-        this.runTransition("retry_after_loss", () => this.engine.retry()),
-      ),
-      button(t, 38, 46, 64, 36, "MENU", "#3ABFF8", () =>
-        this.runTransition("return_to_menu", () => this.engine.menu()),
+      button(
+        t,
+        0,
+        72,
+        148,
+        40,
+        "CHƠI LẠI",
+        "#E94560",
+        () => this.runTransition("retry_after_loss", () => this.engine.retry()),
+        t.icons.rotateCcw,
       ),
     )
-    this.lose.addChild(loseCard, loseBox)
+    this.lose.addChild(this.loseDim, this.loseCard, this.loseBox)
+    this.win.visible = false
     this.lose.visible = false
-    this.lose.position.set(0, 0)
-
-    this.pause = new Container()
-    const dimP = new Sprite({
-      texture: t.dimSoft,
-      width: l.LW,
-      height: l.LH,
-      eventMode: "none",
-    })
-    this.pause.addChild(dimP)
-    const pauseCard = card(t, 220, 140, false)
-    pauseCard.position.set(cx, cy)
-    const pauseBox = new Container()
-    pauseBox.position.set(cx, cy)
-    pauseBox.addChild(
-      title("PAUSED", 30, "#FFFFFF", -22),
-      button(t, 0, 30, 112, 40, "RESUME", "#3ABFF8", () =>
-        this.engine.resume(),
-      ),
-    )
-    this.pause.addChild(pauseCard, pauseBox)
-    this.pause.visible = false
-    this.pause.position.set(0, 0)
-
-    this.root.addChild(this.win, this.lose, this.pause)
+    this.root.addChild(this.win, this.lose, this.pauseOverlay.root)
+    this.endOverlaysBuilt = true
   }
 
   sync(v: GameView) {
     const winOn = v.phase === "WIN"
     const loseOn = v.phase === "LOSE"
-    const pauseOn = v.phase === "PAUSED"
     this.win.visible = winOn
     this.lose.visible = loseOn
-    this.pause.visible = pauseOn
+    this.pauseOverlay.sync(v)
+    this.leaderboard.sync(v)
     if (winOn) {
       const s = v.score.toLocaleString()
       if (s !== this.lastWinScore) {

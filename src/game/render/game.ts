@@ -4,37 +4,40 @@ import type { BubbleShooterEngine } from "../engine"
 import { GameTextures } from "./textures"
 import { SceneLayers } from "./layers"
 import { OverlaysLayer } from "./overlays"
+import { HudLayer } from "./hud"
+import { GameSettingsStore } from "../settings"
 import { measureAsyncDev, measureDev } from "../perf"
-
-const FONT_SAMPLES = [
-  "900 40px Bungee",
-  "900 30px Bungee",
-  "700 30px Outfit",
-  "800 30px Outfit",
-  "800 25px Bungee",
-  "400 12px Outfit",
-]
+import { FONT_SAMPLES } from "./typography"
 
 async function loadFonts() {
+  if (typeof document === "undefined" || !document.fonts) return
   try {
     await Promise.all(FONT_SAMPLES.map((f) => document.fonts.load(f)))
+    await document.fonts.ready
   } catch {
-    // fonts are decorative; rendering continues with fallbacks
+    // Rendering may continue with the system fallback if the optional remote
+    // font host is unavailable, but every Pixi Text still uses the same family.
   }
 }
 
 export class PixiGame {
   private root: Container
   private shake: Container
+  private uiLayer: Container
   private textures: GameTextures | null = null
   private layers: SceneLayers | null = null
   private overlays: OverlaysLayer | null = null
+  private hud: HudLayer | null = null
+  readonly settings = new GameSettingsStore()
   private destroyed = false
   private lastW = 0
   private lastH = 0
   private readonly exposePerfState =
     import.meta.env.DEV &&
     new URLSearchParams(window.location.search).has("perf")
+  private readonly exposeHudDebug =
+    import.meta.env.DEV &&
+    new URLSearchParams(window.location.search).has("debugHud")
   private readonly engineTick = (t: Ticker) =>
     this.engine.tick(t.deltaMS / 1000)
   private readonly syncTick = () => this.sync()
@@ -43,9 +46,13 @@ export class PixiGame {
     private app: Application,
     private engine: BubbleShooterEngine,
   ) {
-    this.root = new Container()
-    this.shake = new Container()
-    this.root.addChild(this.shake)
+    this.root = new Container({ label: "GameRoot" })
+    this.shake = new Container({ label: "ShakeRoot" })
+    this.uiLayer = new Container({
+      label: "uiLayer",
+      sortableChildren: true,
+    })
+    this.root.addChild(this.shake, this.uiLayer)
     this.app.stage.addChild(this.root)
   }
 
@@ -74,7 +81,20 @@ export class PixiGame {
             this.engine.notifyAnimationComplete(commandId, actionId, kind),
         ),
     )
-    this.overlays = new OverlaysLayer(this.shake, this.textures, this.engine)
+    this.hud = new HudLayer(this.uiLayer, this.textures, {
+      requestDashboard: () => {
+        this.overlays?.openLeaderboard()
+      },
+      requestPause: () => this.engine.togglePause(),
+      consumePointerDown: () => this.engine.consumeNextDown(),
+    })
+    this.overlays = new OverlaysLayer(
+      this.uiLayer,
+      this.textures,
+      this.engine,
+      this.settings,
+      () => this.engine.consumeNextDown(),
+    )
     // Initialize every Sprite that starts without a texture (background,
     // danger line, board visuals, and overlays) before PrepareSystem is
     // allowed to render the root for an upload pass. Otherwise Pixi's batcher
@@ -116,7 +136,19 @@ export class PixiGame {
     this.shake.position.set(v.fx.csx, v.fx.csy)
     const t = this.textures!
     this.layers?.sync(v, t)
+    this.hud?.sync(v)
     this.overlays?.sync(v)
+    this.hud?.setSuppressed(this.overlays?.leaderboardOpen ?? false)
+    if (this.exposeHudDebug && this.hud) {
+      const metrics = this.hud.debugMetrics(v)
+      this.app.canvas.dataset.hudDebug = JSON.stringify({
+        viewportWidth: l.LW,
+        viewportHeight: l.LH,
+        hud: metrics.hud,
+        buttonDiameter: metrics.trophyButton.width,
+        bubbleDiameter: metrics.bubbleDiameter,
+      })
+    }
     if (this.exposePerfState) {
       const data = this.app.canvas.dataset
       data.gamePhase = v.phase
@@ -136,6 +168,7 @@ export class PixiGame {
   private relayout() {
     const t = this.textures!
     this.layers?.relayout(this.engine, t)
+    this.hud?.relayout(this.engine)
     this.overlays?.relayout(this.engine, t)
   }
 
@@ -145,6 +178,7 @@ export class PixiGame {
     this.app.ticker.remove(this.engineTick)
     this.app.ticker.remove(this.syncTick)
     this.layers?.destroy()
+    this.overlays?.dispose()
     this.root.destroy({ children: true })
     this.textures?.destroy()
   }

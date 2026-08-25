@@ -1,4 +1,45 @@
-@import url('https://fonts.googleapis.com/css2?family=Bungee&family=Outfit:wght@400;600;700;800;900&display=swap');
+@font-face {
+  font-family: 'Be Vietnam Pro';
+  font-style: normal;
+  font-weight: 400;
+  font-display: block;
+  src: url('https://fonts.gstatic.com/s/bevietnampro/v12/QdVPSTAyLFyeg_IDWvOJmVES_Eww.ttf') format('truetype');
+}
+@font-face {
+  font-family: 'Be Vietnam Pro';
+  font-style: normal;
+  font-weight: 500;
+  font-display: block;
+  src: url('https://fonts.gstatic.com/s/bevietnampro/v12/QdVMSTAyLFyeg_IDWvOJmVES_HTEJl8y.ttf') format('truetype');
+}
+@font-face {
+  font-family: 'Be Vietnam Pro';
+  font-style: normal;
+  font-weight: 600;
+  font-display: block;
+  src: url('https://fonts.gstatic.com/s/bevietnampro/v12/QdVMSTAyLFyeg_IDWvOJmVES_HToIV8y.ttf') format('truetype');
+}
+@font-face {
+  font-family: 'Be Vietnam Pro';
+  font-style: normal;
+  font-weight: 700;
+  font-display: block;
+  src: url('https://fonts.gstatic.com/s/bevietnampro/v12/QdVMSTAyLFyeg_IDWvOJmVES_HSMIF8y.ttf') format('truetype');
+}
+@font-face {
+  font-family: 'Be Vietnam Pro';
+  font-style: normal;
+  font-weight: 800;
+  font-display: block;
+  src: url('https://fonts.gstatic.com/s/bevietnampro/v12/QdVMSTAyLFyeg_IDWvOJmVES_HSQI18y.ttf') format('truetype');
+}
+@font-face {
+  font-family: 'Be Vietnam Pro';
+  font-style: normal;
+  font-weight: 900;
+  font-display: block;
+  src: url('https://fonts.gstatic.com/s/bevietnampro/v12/QdVMSTAyLFyeg_IDWvOJmVES_HS0Il8y.ttf') format('truetype');
+}
 
 html, body, #root {
   width: 100%;
@@ -8,7 +49,7 @@ html, body, #root {
 body {
   overflow: hidden;
   background: #73dff4;
-  font-family: 'Outfit', sans-serif;
+  font-family: 'Be Vietnam Pro', system-ui, sans-serif;
 }
 button, canvas { -webkit-tap-highlight-color: transparent; }
 .game-shell {
@@ -27,3 +68,15 @@ button, canvas { -webkit-tap-highlight-color: transparent; }
   cursor: crosshair;
 }
 .game-canvas canvas { position: absolute; inset: 0; display: block; }
+.hud-debug-overlay {
+  position: absolute;
+  z-index: 30;
+  box-sizing: border-box;
+  border: 2px dashed #ff1744;
+  color: #10142e;
+  background: rgba(255, 255, 255, 0.72);
+  font: 700 10px/14px 'Be Vietnam Pro', system-ui, sans-serif;
+  padding: 2px 4px;
+  pointer-events: none;
+  white-space: nowrap;
+}
