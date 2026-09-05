@@ -4,8 +4,8 @@ import {
   ParticleContainer,
   Rectangle,
 } from "pixi.js"
-import type { Particle, Trail } from "../types"
-import { DOT_R, type GameTextures } from "./textures"
+import type { Particle, Trail } from "../../types"
+import { DOT_R, type GameTextures } from "../core/textures"
 
 const PARTICLE_CAPACITY = 192
 const TRAIL_CAPACITY = 28

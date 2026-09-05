@@ -8,13 +8,13 @@ import {
   type Texture,
   type TextStyleFontWeight,
 } from "pixi.js"
-import type { GameView } from "../types"
-import type { BubbleShooterEngine } from "../engine"
-import type { GameTextures } from "./textures"
-import { GameSettingsStore } from "../settings"
+import type { GameView } from "../../types"
+import type { BubbleShooterEngine } from "../../engine"
+import type { GameTextures } from "../core/textures"
+import { GameSettingsStore } from "../../settings"
 import { LeaderboardOverlay } from "./leaderboardOverlay"
 import { PauseOverlay } from "./pauseOverlay"
-import { GAME_FONT_STACK } from "./typography"
+import { GAME_FONT_STACK } from "../core/typography"
 
 function card(
   t: GameTextures,

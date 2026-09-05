@@ -6,10 +6,11 @@ import {
   Text,
   type TextStyleFontWeight,
 } from "pixi.js"
-import type { LayoutRect } from "../layout"
-import type { GameView } from "../types"
-import type { GameTextures } from "./textures"
-import { GAME_FONT_STACK } from "./typography"
+import type { LayoutRect } from "../../layout"
+import type { GameView } from "../../types"
+import type { GameTextures } from "../core/textures"
+import { GAME_FONT_STACK } from "../core/typography"
+import { LEADERBOARD_PALETTE } from "../core/colors"
 
 export interface HudActions {
   /** Notify the application shell that the player requested the dashboard. */
@@ -39,7 +40,7 @@ function makeText(
   value: string,
   size: number,
   weight: number,
-  fill: string,
+  fill: string | number,
   anchor: 0 | 0.5 = 0,
 ) {
   return new Text({
@@ -51,8 +52,8 @@ function makeText(
       fill,
       letterSpacing: 0.4,
       dropShadow: {
-        color: "#061946",
-        alpha: 0.86,
+        color: LEADERBOARD_PALETTE.dark,
+        alpha: 0.2,
         blur: 2,
         distance: 1,
         angle: Math.PI / 2,
@@ -93,13 +94,15 @@ function drawActionButton(
   visual.background
     .clear()
     .circle(0, 0, radius)
-    .fill({ color: 0x116da3, alpha: 0.96 })
+    .fill({ color: LEADERBOARD_PALETTE.border, alpha: 0.98 })
+    .stroke({ color: LEADERBOARD_PALETTE.purple, alpha: 0.22, width: 1 })
   visual.button.hitArea = new Rectangle(
     -radius - 7,
     -radius - 7,
     (radius + 7) * 2,
     (radius + 7) * 2,
   )
+  visual.icon.tint = LEADERBOARD_PALETTE.purple
   visual.icon.width = iconSize
   visual.icon.height = iconSize
   visual.icon.position.set(0, 0)
@@ -113,8 +116,13 @@ export class HudLayer {
   private readonly content = new Container({ label: "Content" })
   private readonly scoreRegion = new Container({ label: "ScoreRegion" })
   private readonly actionRegion = new Container({ label: "ActionRegion" })
-  private readonly scoreLabel = makeText("ĐIỂM", 10, 900, "#e8fbff")
-  private readonly scoreValue = makeText("0", 22, 900, "#ffffff")
+  private readonly scoreLabel = makeText(
+    "ĐIỂM",
+    10,
+    900,
+    LEADERBOARD_PALETTE.text,
+  )
+  private readonly scoreValue = makeText("0", 22, 900, LEADERBOARD_PALETTE.dark)
   private readonly dashboard: ActionButtonVisual
   private readonly pause: ActionButtonVisual
   private lastScore = ""
@@ -164,11 +172,11 @@ export class HudLayer {
     this.backgroundFill
       .clear()
       .roundRect(panel.x, panel.y, panel.width, panel.height, radius)
-      .fill({ color: 0x1c2e83, alpha: 0.9 })
+      .fill({ color: LEADERBOARD_PALETTE.frame, alpha: 0.96 })
     this.backgroundBorder
       .clear()
       .roundRect(panel.x, panel.y, panel.width, panel.height, radius)
-      .stroke({ color: 0xb5d7ff, alpha: 0.34, width: 1 })
+      .stroke({ color: LEADERBOARD_PALETTE.border, alpha: 0.42, width: 1 })
 
     const scoreFontSize = Math.max(18, Math.min(24, hud.scoreRect.width * 0.24))
     this.scoreLabel.style.fontSize = Math.max(

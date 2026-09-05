@@ -1,7 +1,6 @@
 import { Assets, Texture } from "pixi.js"
-import type { Layout } from "../layout"
-import { loadLucideIconTextures, type PixiIconName } from "./icons"
-import { GAME_FONT_STACK } from "./typography"
+import type { Layout } from "../../layout"
+import { loadLucideIconTextures, type PixiIconName } from "../hud/icons"
 
 // bubble.webp is a 256px square neutral lighting/gloss overlay.
 export const TEX_BR = 128
@@ -39,12 +38,17 @@ function rr(
   g.closePath()
 }
 
+interface TextureStroke {
+  color: string
+  width: number
+}
+
 function roundRectTexture(
   w: number,
   h: number,
   r: number,
   fill: string,
-  stroke?: { color: string; width: number },
+  stroke?: TextureStroke,
 ): Texture {
   const [cv, g] = canvas(w, h)
   rr(g, 0.5, 0.5, w - 1, h - 1, r)
@@ -103,7 +107,6 @@ export class GameTextures {
   readonly pillTop: Texture
   readonly card: Texture
   readonly cardRed: Texture
-  readonly dangerLabel: Texture
   readonly dim: Texture
   readonly icons: Readonly<Record<PixiIconName, Texture>>
 
@@ -135,13 +138,6 @@ export class GameTextures {
       color: "rgba(255,80,80,.4)",
       width: 2,
     })
-    this.dangerLabel = textTexture(
-      "DANGER",
-      `900 12px ${GAME_FONT_STACK}`,
-      "#E95574",
-      90,
-      18,
-    )
     this.dim = roundRectTexture(8, 8, 0, "rgba(5,12,38,.88)")
   }
 
@@ -174,7 +170,6 @@ export class GameTextures {
       this.pillTop,
       this.card,
       this.cardRed,
-      this.dangerLabel,
       this.dim,
       ...Object.values(this.icons),
     ]
@@ -191,28 +186,11 @@ export class GameTextures {
       this.pillTop,
       this.card,
       this.cardRed,
-      this.dangerLabel,
       this.dim,
     ]) {
       t.destroy(true)
     }
   }
-}
-
-function textTexture(
-  text: string,
-  font: string,
-  color: string,
-  w: number,
-  h: number,
-): Texture {
-  const [cv, g] = canvas(w, h)
-  g.font = font
-  g.textAlign = "center"
-  g.textBaseline = "middle"
-  g.fillStyle = color
-  g.fillText(text, w / 2, h / 2)
-  return Texture.from(cv)
 }
 
 export function makeDangerLineTexture(l: Layout, near: boolean): Texture {

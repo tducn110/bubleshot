@@ -1,5 +1,5 @@
 import { Container, Sprite } from "pixi.js"
-import type { GameTextures } from "./textures"
+import type { GameTextures } from "../core/textures"
 
 /** A pooled material: white color base plus an untinted neutral gloss overlay. */
 export class BubbleVisual extends Container {

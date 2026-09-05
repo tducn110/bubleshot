@@ -1,12 +1,12 @@
 import { Application, Container, UPDATE_PRIORITY, type Ticker } from "pixi.js"
 import "pixi.js/prepare"
-import type { BubbleShooterEngine } from "../engine"
+import type { BubbleShooterEngine } from "../../engine"
 import { GameTextures } from "./textures"
 import { SceneLayers } from "./layers"
-import { OverlaysLayer } from "./overlays"
-import { HudLayer } from "./hud"
-import { GameSettingsStore } from "../settings"
-import { measureAsyncDev, measureDev } from "../perf"
+import { OverlaysLayer } from "../overlays/overlays"
+import { HudLayer } from "../hud/hud"
+import { GameSettingsStore } from "../../settings"
+import { measureAsyncDev, measureDev } from "../../perf"
 import { FONT_SAMPLES } from "./typography"
 
 async function loadFonts() {

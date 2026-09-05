@@ -9,9 +9,9 @@ import type {
   MatchAnimationCommand,
   DropAnimationCommand,
   VisualBubble,
-} from "../types"
-import type { BubbleVisual } from "./bubbleVisual"
-import type { GameTextures } from "./textures"
+} from "../../types"
+import type { BubbleVisual } from "../hud/bubbleVisual"
+import type { GameTextures } from "../core/textures"
 
 gsap.registerPlugin(PixiPlugin)
 PixiPlugin.registerPIXI({ Container, Sprite })

@@ -14,6 +14,7 @@ export interface HudLayout {
   actionRect: LayoutRect
   dashboardRect: LayoutRect
   pauseRect: LayoutRect
+  powerUpRects: LayoutRect[]
 }
 
 // Keep the six-row stage-1 opening below the danger threshold even when
@@ -71,6 +72,7 @@ export class Layout {
     actionRect: { x: 432, y: 47, width: 96, height: 44 },
     dashboardRect: { x: 432, y: 47, width: 44, height: 44 },
     pauseRect: { x: 484, y: 47, width: 44, height: 44 },
+    powerUpRects: [],
   }
 
   constructor(
@@ -151,6 +153,7 @@ export class Layout {
         width: buttonSize,
         height: buttonSize,
       },
+      powerUpRects: [],
     }
     // Gameplay owns the full space below HUD. Board, danger and shooter are
     // all derived from this rectangle so resize has one geometry truth.
@@ -172,6 +175,36 @@ export class Layout {
       this.gameplayRect.y +
       this.gameplayRect.height -
       Math.max(52, shooterHeight * 0.42)
+    const powerUpSize = Math.max(32, Math.min(42, shooterHeight * 0.3))
+    const powerUpGap = Math.max(6, Math.min(10, shooterHeight * 0.06))
+    const powerUpXInset = Math.max(powerUpSize / 2 + 8, w * 0.09)
+    const powerUpTop = this.shooterTop + Math.max(8, shooterHeight * 0.08)
+    this.hud.powerUpRects = [
+      {
+        x: powerUpXInset - powerUpSize / 2,
+        y: powerUpTop,
+        width: powerUpSize,
+        height: powerUpSize,
+      },
+      {
+        x: w - powerUpXInset - powerUpSize / 2,
+        y: powerUpTop,
+        width: powerUpSize,
+        height: powerUpSize,
+      },
+      {
+        x: powerUpXInset - powerUpSize / 2,
+        y: powerUpTop + powerUpSize + powerUpGap,
+        width: powerUpSize,
+        height: powerUpSize,
+      },
+      {
+        x: w - powerUpXInset - powerUpSize / 2,
+        y: powerUpTop + powerUpSize + powerUpGap,
+        width: powerUpSize,
+        height: powerUpSize,
+      },
+    ]
     this.SHOOTER_X = w / 2
     this.BOARD_CENTER_X = this.SHOOTER_X
     this.NEXT_X = Math.min(w - 44, this.SHOOTER_X + Math.min(92, w * 0.22))

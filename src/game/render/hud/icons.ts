@@ -2,17 +2,23 @@ import { createElement } from "react"
 import { renderToStaticMarkup } from "react-dom/server"
 import {
   ArrowLeft,
+  AlertTriangle,
+  Bomb,
+  Languages,
   Medal,
   Music,
   Pause,
   Play,
+  Rainbow,
   RotateCcw,
+  Rows3,
   Trophy,
   UserRound,
   Vibrate,
   Volume2,
   VolumeX,
   type LucideIcon,
+  Waypoints,
 } from "lucide-react"
 import { Assets, Texture } from "pixi.js"
 
@@ -22,22 +28,28 @@ import { Assets, Texture } from "pixi.js"
  * an SVG data URI once and loaded as a cached texture. No icon geometry is
  * recreated with Pixi Graphics here.
  */
-export type PixiIconName = "arrowLeft" | "medal" | "trophy" | "userRound" | "pause" | "play" | "music" | "volume" | "volumeX" | "vibration" | "rotateCcw"
+export type PixiIconName = "arrowLeft" | "alertTriangle" | "bomb" | "languages" | "medal" | "trophy" | "userRound" | "pause" | "play" | "rainbow" | "rotateCcw" | "rows3" | "music" | "volume" | "volumeX" | "vibration" | "waypoints"
 
 const ICON_SIZE = 64
 
 const ICON_COMPONENTS: Record<PixiIconName, LucideIcon> = {
   arrowLeft: ArrowLeft,
+  alertTriangle: AlertTriangle,
+  bomb: Bomb,
+  languages: Languages,
   medal: Medal,
   trophy: Trophy,
   userRound: UserRound,
   pause: Pause,
   play: Play,
+  rainbow: Rainbow,
   music: Music,
   volume: Volume2,
   volumeX: VolumeX,
   vibration: Vibrate,
   rotateCcw: RotateCcw,
+  rows3: Rows3,
+  waypoints: Waypoints,
 }
 
 const textureCache = new Map<string, Promise<Texture>>()

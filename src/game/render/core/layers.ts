@@ -5,14 +5,14 @@ import {
   Text,
   type TextStyleOptions,
 } from "pixi.js"
-import { COLORS } from "../config"
-import type { AnimationKind, GameView, VisualBubble } from "../types"
-import { endDevMeasure, measureDev, startDevMeasure } from "../perf"
+import { COLORS } from "../../config"
+import type { AnimationKind, GameView, VisualBubble } from "../../types"
+import { endDevMeasure, measureDev, startDevMeasure } from "../../perf"
 import { SpritePool } from "./pools"
-import { BubblePool, BubbleVisual } from "./bubbleVisual"
-import { GameplayAnimations, type ClaimedBubble } from "./animations"
-import { GameplayParticleLayer } from "./particleLayer"
-import { reconcilePersistentVisuals } from "./boardReconcile"
+import { BubblePool, BubbleVisual } from "../hud/bubbleVisual"
+import { GameplayAnimations, type ClaimedBubble } from "../fx/animations"
+import { GameplayParticleLayer } from "../fx/particleLayer"
+import { reconcilePersistentVisuals } from "../hud/boardReconcile"
 import {
   TEX_BR,
   TRAJ_R,
@@ -20,6 +20,7 @@ import {
   type GameTextures,
 } from "./textures"
 import { GAME_FONT_STACK } from "./typography"
+import { LEADERBOARD_PALETTE } from "./colors"
 
 const DEBUG_LAYOUT =
   import.meta.env.DEV &&
@@ -140,7 +141,13 @@ export class SceneLayers {
   private wallGuides = new Graphics({ label: "WallGuides" })
   private trajectory = new Graphics({ label: "Trajectory" })
   private dangerLine: Sprite
-  private dangerLabel: Sprite
+  private dangerMarker: Sprite
+  private readonly powerUps = ["rows3", "bomb", "rainbow", "waypoints"] as const
+  private readonly powerUpButtons: Array<{
+    root: Container
+    bg: Graphics
+    icon: Sprite
+  }> = []
   private boardLayer = new Container({ label: "BoardLayer" })
   private fxLayer = new Container({ label: "FxLayer" })
   private shotLayer = new Container({ label: "ShotLayer" })
@@ -187,7 +194,11 @@ export class SceneLayers {
     this.bg = new Sprite({ label: "Background" })
     this.bg.anchor.set(0.5)
     this.dangerLine = new Sprite({ label: "DangerLine" })
-    this.dangerLabel = new Sprite({ texture: t.dangerLabel, anchor: 0.5, label: "DangerLabel" })
+    this.dangerMarker = new Sprite({
+      texture: t.icons.alertTriangle,
+      anchor: 0.5,
+      label: "DangerMarker",
+    })
     parent.addChild(
       this.bg,
       this.wallGuides,
@@ -195,7 +206,7 @@ export class SceneLayers {
       this.fxLayer,
       this.shotLayer,
       this.dangerLine,
-      this.dangerLabel,
+      this.dangerMarker,
     )
     if (this.debugLayout) parent.addChild(this.debugLayout)
     this.shotSprites = Array.from({ length: 4 }, () => new BubbleVisual(t))
@@ -205,6 +216,18 @@ export class SceneLayers {
       tint: "#FFE04B",
     })
     this.cannon = new CannonContainer(t)
+    for (const [index, iconName] of this.powerUps.entries()) {
+      const root = new Container({ label: `PowerUp${index + 1}` })
+      const bg = new Graphics({ label: `PowerUp${index + 1}Background` })
+      const icon = new Sprite({
+        texture: t.icons[iconName],
+        anchor: 0.5,
+        label: `PowerUp${index + 1}Icon`,
+      })
+      root.addChild(bg, icon)
+      root.eventMode = "none"
+      this.powerUpButtons.push({ root, bg, icon })
+    }
     this.boardPool = new BubblePool(this.boardLayer, t)
     this.popPool = new BubblePool(this.fxLayer, t)
     this.dropPool = new BubblePool(this.fxLayer, t)
@@ -245,6 +268,7 @@ export class SceneLayers {
       this.cannon,
       this.impactSprite,
       ...this.shotSprites,
+      ...this.powerUpButtons.map(({ root }) => root),
     )
   }
 
@@ -269,6 +293,7 @@ export class SceneLayers {
       .stroke({ color: 0x7feeff, alpha: 0.22, width: 1.5 })
     this.lastNear = this.near(v)
     this.rebuildDanger(v, t)
+    this.layoutPowerUps(v)
     const baseScale = l.R / TEX_BR
     this.currentBaseScale = baseScale
     this.particleLayer.relayout(l.LW, l.LH)
@@ -384,10 +409,35 @@ export class SceneLayers {
     this.dangerTex = makeDangerLineTexture(v.layout, this.lastNear)
     this.dangerLine.texture = this.dangerTex
     this.dangerLine.position.set(v.layout.BOARD_LEFT, v.layout.DANGER_Y)
-    this.dangerLabel.position.set(
-      v.layout.BOARD_CENTER_X,
-      v.layout.DANGER_Y - 10,
-    )
+    this.dangerMarker.position.set(v.layout.BOARD_CENTER_X, v.layout.DANGER_Y)
+    this.dangerMarker.width = Math.max(18, Math.min(26, v.layout.R * 1.15))
+    this.dangerMarker.height = this.dangerMarker.width
+    this.dangerMarker.tint = 0xff4d6d
+  }
+
+  private layoutPowerUps(v: GameView) {
+    const size = Math.max(16, v.layout.hud.powerUpRects[0]?.width ?? 36)
+    for (let i = 0; i < this.powerUpButtons.length; i++) {
+      const visual = this.powerUpButtons[i]
+      const rect = v.layout.hud.powerUpRects[i]
+      if (!rect) {
+        visual.root.visible = false
+        continue
+      }
+      visual.root.visible = true
+      visual.root.position.set(
+        rect.x + rect.width / 2,
+        rect.y + rect.height / 2,
+      )
+      visual.bg
+        .clear()
+        .circle(0, 0, size / 2)
+        .fill({ color: LEADERBOARD_PALETTE.border, alpha: 0.96 })
+        .stroke({ color: LEADERBOARD_PALETTE.white, alpha: 0.8, width: 1.5 })
+      visual.icon.tint = LEADERBOARD_PALETTE.purple
+      visual.icon.width = size * 0.52
+      visual.icon.height = size * 0.52
+    }
   }
 
   private syncBoard(v: GameView, t: GameTextures, baseScale: number) {

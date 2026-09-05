@@ -8,7 +8,7 @@ import {
   type TextStyleFontWeight,
   type Texture,
 } from "pixi.js"
-import type { GameView } from "../types"
+import type { GameView } from "../../types"
 import {
   DEMO_LEADERBOARD_DATA,
   formatLeaderboardRank,
@@ -20,19 +20,13 @@ import {
   type LeaderboardData,
   type LeaderboardEntry,
   type RankTone,
-} from "../leaderboard"
-import type { GameTextures } from "./textures"
-import { GAME_FONT_STACK } from "./typography"
+} from "../../leaderboard"
+import type { GameTextures } from "../core/textures"
+import { GAME_FONT_STACK } from "../core/typography"
+import { LEADERBOARD_PALETTE } from "../core/colors"
 
 const C = {
-  bg: 0xfaf7ff,
-  frame: 0xfffbff,
-  white: 0xffffff,
-  purple: 0x5524bd,
-  dark: "#24105e",
-  text: "#4f2bb1",
-  muted: "#7769a8",
-  border: 0xd7b9ff,
+  ...LEADERBOARD_PALETTE,
   gold: 0xffc52f,
   silver: 0xb7c4df,
   bronze: 0xd9895b,

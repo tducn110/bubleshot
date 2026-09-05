@@ -1,7 +1,7 @@
 import { useEffect, useRef } from "react"
 import { Application } from "pixi.js"
 import { BubbleShooterEngine } from "../game/engine"
-import { PixiGame } from "../game/render/game"
+import { PixiGame } from "../game/render/core/game"
 
 export default function BubbleGame() {
   const hostRef = useRef<HTMLDivElement>(null)
@@ -112,7 +112,7 @@ export default function BubbleGame() {
           return
         }
         if (import.meta.env.DEV) {
-          const { attachPixiDevtools } = await import("../game/render/devtools")
+          const { attachPixiDevtools } = await import("../game/render/core/devtools")
           await attachPixiDevtools(pixiApp)
 
           // Keep the legacy alias for the unofficial inspector extension.
