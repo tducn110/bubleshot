@@ -2,6 +2,7 @@ import { useEffect, useRef } from "react"
 import { Application } from "pixi.js"
 import { BubbleShooterEngine } from "../game/engine"
 import { PixiGame } from "../game/render/core/game"
+import { winkGame } from "../integrations/wink/client"
 
 export default function BubbleGame() {
   const hostRef = useRef<HTMLDivElement>(null)
@@ -138,7 +139,25 @@ export default function BubbleGame() {
       }
     })()
 
+    const unbindLifecycle = winkGame.bindLifecycle({
+      onPause: () => {
+        engine?.pause()
+      },
+      onResume: () => {
+        engine?.resume()
+      },
+      onMute: () => {
+        game?.settings.set("bgmEnabled", false)
+        game?.settings.set("sfxEnabled", false)
+      },
+      onUnmute: () => {
+        game?.settings.set("bgmEnabled", true)
+        game?.settings.set("sfxEnabled", true)
+      },
+    })
+
     return () => {
+      unbindLifecycle()
       disposed = true
       destroyGame()
       engine?.destroy()

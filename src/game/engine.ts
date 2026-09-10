@@ -20,6 +20,7 @@ import {
   screenToGame,
 } from "./viewport"
 import { endDevMeasure, markDev, startDevMeasure } from "./perf"
+import { winkGame, type WinkRound } from "../integrations/wink/client"
 import type {
   AnimationCommand,
   AnimationCompletion,
@@ -40,6 +41,8 @@ export class BubbleShooterEngine {
   readonly layout = new Layout()
   readonly board = new Board(this.layout)
   readonly fx = new Fx()
+
+  private currentRound: WinkRound | null = null
 
   phase: Phase = "LOADING"
   actionId = 0
@@ -292,11 +295,8 @@ export class BubbleShooterEngine {
     if (e.key === "Escape" || e.key === "p" || e.key === "P") this.togglePause()
   }
 
-  togglePause() {
-    if (this.phase === "PAUSED") {
-      this.resume()
-      return
-    }
+  pause() {
+    if (this.phase === "PAUSED") return
     if (
       [
         "READY",
@@ -312,6 +312,14 @@ export class BubbleShooterEngine {
     }
   }
 
+  togglePause() {
+    if (this.phase === "PAUSED") {
+      this.resume()
+      return
+    }
+    this.pause()
+  }
+
   resume() {
     this.phase = this.pp
     if (this.phase === "READY") this.calcTraj()
@@ -320,15 +328,27 @@ export class BubbleShooterEngine {
   // ─── Public actions (driven by overlay buttons) ────────────────────────────
 
   retry() {
+    if (this.currentRound) {
+      winkGame.completeRound(this.currentRound)
+      this.currentRound = null
+    }
     this.init()
   }
 
   nextStage() {
+    if (this.currentRound) {
+      winkGame.completeRound(this.currentRound)
+      this.currentRound = null
+    }
     this.stage++
     this.init()
   }
 
   menu() {
+    if (this.currentRound) {
+      winkGame.completeRound(this.currentRound)
+      this.currentRound = null
+    }
     this.stage = 1
     this.init()
   }
@@ -408,6 +428,9 @@ export class BubbleShooterEngine {
   private doShoot() {
     if (!this.canShoot) return
     if (this.ply >= this.layout.SHOOTER_Y - 5) return
+    if (!this.currentRound) {
+      this.currentRound = winkGame.startRound()
+    }
     const count = this.shotMode
     const center = this.aimAngle
     this.actionId = (this.actionId + 1) >>> 0 || 1
@@ -982,6 +1005,11 @@ export class BubbleShooterEngine {
     if (this.board.isClear()) {
       this.starsEarned = this.moves >= 15 ? 3 : this.moves >= 8 ? 2 : 1
       this.phase = "WIN"
+      if (this.currentRound) {
+        winkGame.completeRound(this.currentRound)
+        winkGame.submitFinalScore({ score: this.score })
+        this.currentRound = null
+      }
       this.fx.shake(0.7)
       return
     }
@@ -995,6 +1023,11 @@ export class BubbleShooterEngine {
           const { y } = this.layout.gToW(r, col, this.board.gridParity)
           if (y + R >= DANGER_Y) {
             this.phase = "LOSE"
+            if (this.currentRound) {
+              winkGame.completeRound(this.currentRound)
+              winkGame.submitFinalScore({ score: this.score })
+              this.currentRound = null
+            }
             return
           }
         }

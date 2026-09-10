@@ -24,6 +24,7 @@ import {
 import type { GameTextures } from "../core/textures"
 import { GAME_FONT_STACK } from "../core/typography"
 import { LEADERBOARD_PALETTE } from "../core/colors"
+import { winkGame } from "../../../integrations/wink/client"
 
 const C = {
   ...LEADERBOARD_PALETTE,
@@ -379,6 +380,29 @@ export class LeaderboardOverlay {
   open() {
     this.openState = true
     this.root.visible = true
+    winkGame
+      .refreshLeaderboard()
+      .then((res) => {
+        if (res?.entries && res.entries.length > 0) {
+          this.setData({
+            entries: res.entries.map((e) => ({
+              rank: e.rank,
+              name: e.displayName || "ẨN DANH",
+              score: e.score,
+              avatar: null,
+            })),
+            currentPlayer: res.me
+              ? {
+                  name: res.me.displayName || "BẠN",
+                  score: res.me.score,
+                  rank: res.me.rank,
+                  avatar: null,
+                }
+              : this.data.currentPlayer,
+          })
+        }
+      })
+      .catch(() => {})
   }
   close() {
     this.openState = false
