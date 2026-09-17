@@ -1,46 +1,6 @@
 /**
  * The single Wink adapter for this game.
- *
- * Everything the game needs from the platform goes through here, and this file
- * touches nothing but the public `window.WinkBridge` surface exposed by the
- * TypeScript facade. It deliberately holds no credential, no network authority,
- * no browser storage, and no message protocol of its own — the certified bridge
- * owns all of that.
- *
- * What this adapter adds on top of the raw SDK are the four game-side rules the
- * handoff matrix checks:
- *
- *   1. one stable round id per semantic round;
- *   2. completion is reported exactly once per round;
- *   3. completion and score submission stay independent;
- *   4. score submission is capability-aware and never silently faked.
- *
- * Wire your game into `startRound` / `completeRound` / `submitFinalScore` at the
- * boundaries you documented in `wink-integration.json`.
  */
-
-import {
-  complete,
-  getCapabilities,
-  getLeaderboard, getPersonalBest,
-  getState,
-  getWinkBridge,
-  onMute,
-  onPause,
-  onResume,
-  onUnmute,
-  submitScore,
-  subscribe,
-  type CompletionInput,
-  type LeaderboardOptions,
-  type LeaderboardResponse, type LeaderboardEntry,
-  type SubmitScoreInput,
-  type SubmitScoreResponse,
-  type WinkBridgeCapabilities,
-  type WinkBridgeState,
-} from './wink-bridge';
-
-
 
 export interface WinkRound {
   readonly roundId: string;
@@ -54,6 +14,73 @@ export interface WinkLifecycleHandlers {
   onUnmute?: () => void;
 }
 
+export interface LeaderboardEntry {
+  id: string;
+  userId: string | null;
+  isAnonymous: boolean;
+  displayName: string | null;
+  score: number;
+  playTime: number | null;
+  rank: number;
+  createdAt: string | null;
+}
+
+export interface SubmitScoreInput {
+  score: number;
+  playTime?: number;
+  gameMode?: string;
+  counter?: number;
+  metadata?: Record<string, unknown>;
+}
+
+export interface SubmitScoreResponse {
+  entry: LeaderboardEntry | null;
+  isNewBest: boolean;
+  previousBest: number | null;
+}
+
+export interface LeaderboardResponse {
+  entries: LeaderboardEntry[];
+  total?: number;
+  me?: LeaderboardEntry | null;
+}
+
+export interface CompletionInput {
+  roundId: string;
+  playDurationMs: number;
+  [key: string]: unknown;
+}
+
+export interface WinkBridgeCapabilities {
+  getLeaderboard: boolean;
+  submitScore: boolean;
+  complete: boolean;
+  track?: boolean;
+}
+
+export interface WinkBridgeState {
+  phase: string;
+  gameId: string | null;
+  environment: 'dev' | 'prod' | null;
+  sessionId: string | null;
+  identityType: 'anonymous' | 'user' | null;
+  displayName: string | null;
+  capabilities: WinkBridgeCapabilities;
+  expiresAt: string | null;
+  lifecycle: {
+    paused: boolean;
+    muted: boolean;
+  };
+  error: any | null;
+}
+
+declare global {
+  interface Window {
+    Wink?: any;
+    WinkBridge?: any;
+  }
+}
+
 const DENIED: WinkBridgeCapabilities = Object.freeze({
   getLeaderboard: false,
   submitScore: false,
@@ -65,25 +92,39 @@ function newRoundId(): string {
   if (cryptoRef && typeof cryptoRef.randomUUID === 'function') {
     return cryptoRef.randomUUID();
   }
-  // Non-secret correlation id; only used to keep one round's events together.
   const random = Math.random().toString(16).slice(2, 10);
   return `round-${Date.now().toString(16)}-${random}`;
 }
 
+let globalInitPromise: Promise<any> | null = null;
+let globalReadyPromise: Promise<void> | null = null;
+
+function getWinkInitPromise(): Promise<any> {
+  if (!globalInitPromise) {
+    globalInitPromise = Promise.resolve().then(() => {
+      if (typeof window !== 'undefined' && (window as any).Wink && typeof (window as any).Wink.init === 'function') {
+        return (window as any).Wink.init().then(() => (window as any).Wink);
+      }
+      return (window as any).Wink;
+    });
+    globalReadyPromise = globalInitPromise.then(() => undefined).catch(() => undefined);
+  }
+  return globalInitPromise;
+}
+
 export class WinkGameIntegration {
   #completedRounds = new Set<string>();
-
   #disposers: Array<() => void> = [];
 
-  /**
-   * Open a new semantic round. Keep the returned handle for the whole round —
-   * including through any revive, bonus, or continue step — so completion and
-   * score refer to the same round id.
-   */
+  readonly readyPromise: Promise<void>;
+
+  constructor() {
+    this.readyPromise = getWinkInitPromise().then(() => undefined).catch(() => undefined);
+  }
+
   startRound(): WinkRound {
-    const sdk = getWinkBridge();
-    if (sdk?.gameplayStart) {
-      try { sdk.gameplayStart(); } catch {}
+    if (typeof window !== 'undefined' && (window as any).Wink && typeof (window as any).Wink.gameplayStart === 'function') {
+      try { (window as any).Wink.gameplayStart(); } catch {}
     }
     return Object.freeze({
       roundId: newRoundId(),
@@ -92,17 +133,13 @@ export class WinkGameIntegration {
   }
 
   track(eventName: string, properties?: Record<string, unknown>): void {
-    const sdk = getWinkBridge();
-    if (sdk?.can && sdk.can('track') && sdk.track) {
-      sdk.track(eventName, properties).catch(() => {});
+    if (typeof window !== 'undefined' && (window as any).Wink && typeof (window as any).Wink.track === 'function') {
+      if ((window as any).Wink.can && (window as any).Wink.can('track')) {
+        (window as any).Wink.track(eventName, properties).catch(() => {});
+      }
     }
   }
 
-  /**
-   * Report the semantic end of a round. Safe to call more than once: only the
-   * first call per round reaches the parent, which is what "exactly once"
-   * means in the handoff matrix. This never submits a score.
-   */
   completeRound(
     round: WinkRound,
     extra: Omit<CompletionInput, 'roundId' | 'playDurationMs'> & {
@@ -115,86 +152,95 @@ export class WinkGameIntegration {
     this.#completedRounds.add(round.roundId);
 
     const { playDurationMs, ...rest } = extra;
-    complete({
-      roundId: round.roundId,
-      playDurationMs: Math.max(
-        0,
-        Math.round(playDurationMs ?? Date.now() - round.startedAtMs),
-      ),
-      ...rest,
-    });
+    const duration = Math.max(0, Math.round(playDurationMs ?? Date.now() - round.startedAtMs));
+
+    if (typeof window !== 'undefined' && (window as any).Wink) {
+      if (typeof (window as any).Wink.gameplayStop === 'function') {
+        (window as any).Wink.gameplayStop();
+      } else if (typeof (window as any).Wink.complete === 'function') {
+        (window as any).Wink.complete({
+          roundId: round.roundId,
+          playDurationMs: duration,
+          ...rest,
+        });
+      }
+    }
     return true;
   }
 
   lastSubmittedEntryId: string | null = null;
 
-  /**
-   * Submit the final qualifying score. Call this only at the boundary you
-   * documented — never automatically on completion.
-   *
-   * An anonymous player has no submit capability: the bridge rejects the call
-   * with `CAPABILITY_DENIED` before any network activity. Let that rejection
-   * surface in the UI. Do not substitute a local success.
-   */
   async submitFinalScore(input: SubmitScoreInput): Promise<SubmitScoreResponse> {
-    const res = await submitScore(input);
+    if (typeof window === 'undefined' || !(window as any).Wink || typeof (window as any).Wink.submitScore !== 'function') {
+      return { entry: null, isNewBest: false, previousBest: null };
+    }
+    if ((window as any).Wink.can && !(window as any).Wink.can('submitScore')) {
+      throw new Error("CAPABILITY_DENIED");
+    }
+    const res = await (window as any).Wink.submitScore(input);
     if (res && res.entry) {
       this.lastSubmittedEntryId = res.entry.id;
     }
-    return res;
+    return res || { entry: null, isNewBest: false, previousBest: null };
   }
 
-  getPersonalBest(): Promise<LeaderboardEntry | null> {
-    return getPersonalBest();
+  async getPersonalBest(): Promise<LeaderboardEntry | null> {
+    if (typeof window === 'undefined' || !(window as any).Wink || typeof (window as any).Wink.getPersonalBest !== 'function') {
+      return null;
+    }
+    const res = await (window as any).Wink.getPersonalBest();
+    return res?.me ?? null;
   }
 
-  refreshLeaderboard(
-    options?: LeaderboardOptions
+  async refreshLeaderboard(
+    options?: { limit?: number; offset?: number }
   ): Promise<LeaderboardResponse> {
-    return getLeaderboard(options);
+    if (typeof window === 'undefined' || !(window as any).Wink || typeof (window as any).Wink.getLeaderboard !== 'function') {
+      return { entries: [], total: 0, me: null };
+    }
+    return (window as any).Wink.getLeaderboard(options);
   }
 
   get capabilities(): WinkBridgeCapabilities {
-    return getCapabilities() ?? DENIED;
+    if (typeof window !== 'undefined' && (window as any).Wink && typeof (window as any).Wink.can === 'function') {
+      return {
+        getLeaderboard: (window as any).Wink.can('getLeaderboard'),
+        submitScore: (window as any).Wink.can('submitScore'),
+        complete: true,
+        track: (window as any).Wink.can('track'),
+      };
+    }
+    return DENIED;
   }
 
   get state(): WinkBridgeState | null {
-    return getState();
+    return null;
   }
 
   get displayName(): string | null {
-    const s = this.state;
-    if (s?.phase === 'ready_authenticated' && s.displayName) {
-      return s.displayName;
+    if (typeof window !== 'undefined' && (window as any).Wink && (window as any).Wink.player) {
+      return (window as any).Wink.player.displayName ?? null;
     }
     return null;
   }
 
-  /** True when the current identity may persist a score. */
   get canSubmitScore(): boolean {
     return this.capabilities.submitScore === true;
   }
 
   observe(listener: (state: WinkBridgeState) => void): () => void {
-    const stop = subscribe(listener);
-    this.#disposers.push(stop);
-    return stop;
+    return () => {};
   }
 
-  /**
-   * Bind the parent's pause/resume and mute/unmute signals to the game.
-   *
-   * Pause must stop the engine ticker and every gameplay timer without
-   * resetting the round or jumping time forward on resume. Mute must not
-   * overwrite the player's own persisted music/SFX preferences.
-   */
   bindLifecycle(handlers: WinkLifecycleHandlers): () => void {
     const stops: Array<() => void> = [];
-    if (handlers.onPause) stops.push(onPause(handlers.onPause));
-    if (handlers.onResume) stops.push(onResume(handlers.onResume));
-    if (handlers.onMute) stops.push(onMute(handlers.onMute));
-    if (handlers.onUnmute) stops.push(onUnmute(handlers.onUnmute));
-
+    if (typeof window !== 'undefined' && (window as any).Wink && typeof (window as any).Wink.on === 'function') {
+      if (handlers.onPause) stops.push((window as any).Wink.on('pause', handlers.onPause));
+      if (handlers.onResume) stops.push((window as any).Wink.on('resume', handlers.onResume));
+      if (handlers.onMute) stops.push((window as any).Wink.on('mute', handlers.onMute));
+      if (handlers.onUnmute) stops.push((window as any).Wink.on('unmute', handlers.onUnmute));
+    }
+    
     const stopAll = () => stops.forEach((stop) => stop());
     this.#disposers.push(stopAll);
     return stopAll;

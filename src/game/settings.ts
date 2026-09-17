@@ -42,6 +42,7 @@ function loadSettings(storage: Storage | undefined): GameSettingsSnapshot {
 export class GameSettingsStore {
   private snapshot: GameSettingsSnapshot
   private gameplayPaused = false
+  private parentMuted = false
 
   constructor(
     private readonly storage: Storage | undefined = getBrowserStorage(),
@@ -63,12 +64,16 @@ export class GameSettingsStore {
     this.set(key, !this.snapshot[key])
   }
 
+  setParentMuted(muted: boolean) {
+    this.parentMuted = muted
+  }
+
   setGameplayPaused(paused: boolean) {
     this.gameplayPaused = paused
   }
 
   get bgmShouldPlay() {
-    return this.snapshot.bgmEnabled && !this.gameplayPaused
+    return this.snapshot.bgmEnabled && !this.gameplayPaused && !this.parentMuted
   }
 
   triggerHaptics(pattern: number | number[] = 10) {

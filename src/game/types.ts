@@ -26,9 +26,19 @@ export interface Shot {
   settled: boolean
   row: number
   col: number
+  /** Optional so existing test fixtures remain valid while pooled shots reset it. */
+  power?: ShotPower | null
 }
 
 export type ShotMode = 1 | 2 | 3 | 4
+export type PowerUpId = "rows3" | "bomb" | "rainbow" | "waypoints"
+export type ShotPower = "bomb" | "rainbow"
+
+export interface PowerUpStatus {
+  id: PowerUpId
+  available: boolean
+  armed: boolean
+}
 
 export interface ResolvedBubble {
   id: number
@@ -55,6 +65,8 @@ export interface ResolveResult {
   stale: boolean
   placed: ResolvedBubble[]
   matched: ResolvedBubble[]
+  /** Bubbles removed by a bomb before normal match resolution. */
+  detonated: ResolvedBubble[]
   floatingGroups: FloatingGroupResult[]
 }
 
@@ -154,6 +166,7 @@ export interface GameView {
   readonly aimAngle: number
   readonly recoil: number
   readonly shotMode: ShotMode
+  readonly powerUps: readonly PowerUpStatus[]
   readonly feverProgress: number
   readonly feverActive: boolean
   readonly feverShots: number

@@ -1,4 +1,5 @@
 import {
+  Circle,
   Container,
   Graphics,
   Sprite,
@@ -6,7 +7,13 @@ import {
   type TextStyleOptions,
 } from "pixi.js"
 import { COLORS } from "../../config"
-import type { AnimationKind, GameView, VisualBubble } from "../../types"
+import type {
+  AnimationKind,
+  GameView,
+  PowerUpId,
+  PowerUpStatus,
+  VisualBubble,
+} from "../../types"
 import { endDevMeasure, measureDev, startDevMeasure } from "../../perf"
 import { SpritePool } from "./pools"
 import { BubblePool, BubbleVisual } from "../hud/bubbleVisual"
@@ -148,6 +155,7 @@ export class SceneLayers {
     bg: Graphics
     icon: Sprite
   }> = []
+  private powerUpStateKey = ""
   private boardLayer = new Container({ label: "BoardLayer" })
   private fxLayer = new Container({ label: "FxLayer" })
   private shotLayer = new Container({ label: "ShotLayer" })
@@ -190,6 +198,8 @@ export class SceneLayers {
       actionId: number,
       kind: AnimationKind,
     ) => void,
+    consumePointerDown: () => void,
+    onPowerUp: (id: PowerUpId) => void,
   ) {
     this.bg = new Sprite({ label: "Background" })
     this.bg.anchor.set(0.5)
@@ -225,7 +235,10 @@ export class SceneLayers {
         label: `PowerUp${index + 1}Icon`,
       })
       root.addChild(bg, icon)
-      root.eventMode = "none"
+      root.eventMode = "static"
+      root.cursor = "pointer"
+      root.on("pointerdown", consumePointerDown)
+      root.on("pointertap", () => onPowerUp(iconName))
       this.powerUpButtons.push({ root, bg, icon })
     }
     this.boardPool = new BubblePool(this.boardLayer, t)
@@ -360,6 +373,7 @@ export class SceneLayers {
     this.syncShots(v, t, baseScale)
     this.syncTraj(v, t)
     this.syncDanger(v, t)
+    this.syncPowerUps(v)
   }
 
   private claimAnimationBubble(
@@ -429,15 +443,52 @@ export class SceneLayers {
         rect.x + rect.width / 2,
         rect.y + rect.height / 2,
       )
-      visual.bg
-        .clear()
-        .circle(0, 0, size / 2)
-        .fill({ color: LEADERBOARD_PALETTE.border, alpha: 0.96 })
-        .stroke({ color: LEADERBOARD_PALETTE.white, alpha: 0.8, width: 1.5 })
-      visual.icon.tint = LEADERBOARD_PALETTE.purple
+      visual.root.hitArea = new Circle(0, 0, size / 2 + 6)
       visual.icon.width = size * 0.52
       visual.icon.height = size * 0.52
     }
+    this.powerUpStateKey = ""
+    this.syncPowerUps(v)
+  }
+
+  private syncPowerUps(v: GameView) {
+    const key = v.powerUps
+      .map((power) => `${power.id}:${Number(power.available)}:${Number(power.armed)}`)
+      .join("|")
+    if (key === this.powerUpStateKey) return
+    this.powerUpStateKey = key
+    for (let index = 0; index < this.powerUpButtons.length; index++) {
+      const visual = this.powerUpButtons[index]
+      const status = v.powerUps[index]
+      const rect = v.layout.hud.powerUpRects[index]
+      if (!visual || !status || !rect) continue
+      this.drawPowerUp(visual, status, rect.width)
+    }
+  }
+
+  private drawPowerUp(
+    visual: (typeof this.powerUpButtons)[number],
+    status: PowerUpStatus,
+    size: number,
+  ) {
+    const armed = status.available && status.armed
+    visual.root.alpha = status.available ? 1 : 0.38
+    visual.root.eventMode = status.available ? "static" : "none"
+    visual.bg
+      .clear()
+      .circle(0, 0, size / 2)
+      .fill({
+        color: armed ? LEADERBOARD_PALETTE.purple : LEADERBOARD_PALETTE.border,
+        alpha: 0.98,
+      })
+      .stroke({
+        color: armed ? LEADERBOARD_PALETTE.white : LEADERBOARD_PALETTE.white,
+        alpha: armed ? 0.95 : 0.8,
+        width: armed ? 2 : 1.5,
+      })
+    visual.icon.tint = armed
+      ? LEADERBOARD_PALETTE.white
+      : LEADERBOARD_PALETTE.purple
   }
 
   private syncBoard(v: GameView, t: GameTextures, baseScale: number) {

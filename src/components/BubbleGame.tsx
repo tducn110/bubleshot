@@ -147,12 +147,10 @@ export default function BubbleGame() {
         engine?.resume()
       },
       onMute: () => {
-        game?.settings.set("bgmEnabled", false)
-        game?.settings.set("sfxEnabled", false)
+        game?.settings.setParentMuted(true)
       },
       onUnmute: () => {
-        game?.settings.set("bgmEnabled", true)
-        game?.settings.set("sfxEnabled", true)
+        game?.settings.setParentMuted(false)
       },
     })
 

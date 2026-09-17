@@ -20,6 +20,11 @@ import {
   screenToGame,
 } from "./viewport"
 import { endDevMeasure, markDev, startDevMeasure } from "./perf"
+import {
+  traceTrajectory,
+  type TrajectoryBubble,
+  type TrajectorySegment,
+} from "./trajectory"
 import { winkGame, type WinkRound } from "../integrations/wink/client"
 import type {
   AnimationCommand,
@@ -27,6 +32,8 @@ import type {
   AnimationKind,
   Phase,
   Point,
+  PowerUpId,
+  PowerUpStatus,
   ResolveResult,
   Shot,
   ShotMode,
@@ -36,6 +43,7 @@ import type {
 
 const CELL_STRIDE = 9
 const CELL_CAPACITY = 64 * CELL_STRIDE
+const POWER_UP_IDS = ["rows3", "bomb", "rainbow", "waypoints"] as const
 
 export class BubbleShooterEngine {
   readonly layout = new Layout()
@@ -60,6 +68,12 @@ export class BubbleShooterEngine {
   feverActive = false
   feverShots = 0
   traj: Point[] = []
+  private armedPowerUp: PowerUpId | null = null
+  private readonly powerUpStates: PowerUpStatus[] = POWER_UP_IDS.map((id) => ({
+    id,
+    available: true,
+    armed: false,
+  }))
 
   sc = 1
   ox = 0
@@ -93,6 +107,7 @@ export class BubbleShooterEngine {
       settled: false,
       row: -1,
       col: -1,
+      power: null,
     },
     {
       actionId: 0,
@@ -104,6 +119,7 @@ export class BubbleShooterEngine {
       settled: false,
       row: -1,
       col: -1,
+      power: null,
     },
     {
       actionId: 0,
@@ -115,6 +131,7 @@ export class BubbleShooterEngine {
       settled: false,
       row: -1,
       col: -1,
+      power: null,
     },
     {
       actionId: 0,
@@ -126,12 +143,18 @@ export class BubbleShooterEngine {
       settled: false,
       row: -1,
       col: -1,
+      power: null,
     },
   ]
   private readonly trajFree: Point[] = Array.from({ length: 40 }, () => ({
     x: 0,
     y: 0,
   }))
+  private readonly trajectoryBubbles: TrajectoryBubble[] = Array.from(
+    { length: CELL_CAPACITY },
+    () => ({ row: -1, col: -1, x: 0, y: 0 }),
+  )
+  private trajectoryBubbleCount = 0
   private readonly snapSeen = new Uint32Array(CELL_CAPACITY)
   private readonly snapReserved = new Uint32Array(CELL_CAPACITY)
   private snapGeneration = 0
@@ -353,6 +376,19 @@ export class BubbleShooterEngine {
     this.init()
   }
 
+  /** Arms one HUD power-up for the next semantic shot without touching board state. */
+  activatePowerUp(id: PowerUpId): boolean {
+    if (!this.canShoot) return false
+    const state = this.powerUpStates.find((item) => item.id === id)
+    if (!state?.available) return false
+
+    this.armedPowerUp = this.armedPowerUp === id ? null : id
+    for (const item of this.powerUpStates)
+      item.armed = item.id === this.armedPowerUp
+    this.calcTraj()
+    return true
+  }
+
   // ─── Init ────────────────────────────────────────────────────────────────
 
   private init() {
@@ -372,6 +408,11 @@ export class BubbleShooterEngine {
     this.feverProgress = 0
     this.feverActive = false
     this.feverShots = 0
+    this.armedPowerUp = null
+    for (const power of this.powerUpStates) {
+      power.available = true
+      power.armed = false
+    }
     this.pendingAnimations.clear()
     this.commandRemaining.clear()
     this.completionQueue.length = 0
@@ -394,6 +435,9 @@ export class BubbleShooterEngine {
 
   get shotMode(): ShotMode {
     return shotCountForCombo(this.combo, this.feverActive)
+  }
+  get powerUps(): readonly PowerUpStatus[] {
+    return this.powerUpStates
   }
   get canShoot() {
     return (
@@ -431,7 +475,15 @@ export class BubbleShooterEngine {
     if (!this.currentRound) {
       this.currentRound = winkGame.startRound()
     }
-    const count = this.shotMode
+    const selectedPower = this.armedPowerUp
+    const count =
+      selectedPower === "rows3"
+        ? (Math.max(3, this.shotMode) as ShotMode)
+        : this.shotMode
+    const projectilePower =
+      selectedPower === "bomb" || selectedPower === "rainbow"
+        ? selectedPower
+        : null
     const center = this.aimAngle
     this.actionId = (this.actionId + 1) >>> 0 || 1
     this.activeBoardVersion = this.board.version
@@ -450,7 +502,19 @@ export class BubbleShooterEngine {
       shot.settled = false
       shot.row = -1
       shot.col = -1
+      shot.power =
+        projectilePower !== null && i === Math.floor((count - 1) / 2)
+          ? projectilePower
+          : null
       this.shots.push(shot)
+    }
+    if (selectedPower) {
+      const state = this.powerUpStates.find((item) => item.id === selectedPower)
+      if (state) {
+        state.available = false
+        state.armed = false
+      }
+      this.armedPowerUp = null
     }
     this.cur = this.nxt
     this.nxt = rndColor(this.colorsInPlay)
@@ -519,6 +583,40 @@ export class BubbleShooterEngine {
 
   // ─── Trajectory ──────────────────────────────────────────────────────────
 
+  private rebuildTrajectoryBubbles() {
+    let count = 0
+    for (let row = 0; row < this.board.rows.length; row++) {
+      const rowCapacity = this.layout.rowCapacity(row, this.board.gridParity)
+      for (let col = 0; col < rowCapacity; col++) {
+        if (this.board.cell(row, col) === null) continue
+        const bubble = this.trajectoryBubbles[count]
+        if (!bubble) break
+        bubble.row = row
+        bubble.col = col
+        bubble.x = this.layout.worldX(row, col, this.board.gridParity)
+        bubble.y = this.layout.worldY(row)
+        count++
+      }
+    }
+    this.trajectoryBubbleCount = count
+  }
+
+  private addTrajectoryDots(segment: TrajectorySegment, spacing: number) {
+    const dx = segment.to.x - segment.from.x
+    const dy = segment.to.y - segment.from.y
+    const length = Math.hypot(dx, dy)
+    if (length <= 0) return
+    let distance = spacing
+    while (distance < length && this.traj.length < 38) {
+      const ratio = distance / length
+      this.addTrajectoryPoint(
+        segment.from.x + dx * ratio,
+        segment.from.y + dy * ratio,
+      )
+      distance += spacing
+    }
+  }
+
   private calcTraj() {
     if (!this.canShoot) {
       this.clearTrajectory()
@@ -529,98 +627,65 @@ export class BubbleShooterEngine {
       this.clearTrajectory()
       return
     }
-    const { WALL_L, WALL_R, BOARD_TOP, R, ROW_H, SHOOTER_X, SHOOTER_Y } =
-      this.layout
+    const { WALL_L, WALL_R, BOARD_TOP, R, SHOOTER_X, SHOOTER_Y } = this.layout
     this.clearTrajectory()
-    const a = this.aimAngle
-    let vx = Math.sin(a) * SHOT_SPEED
-    let vy = -Math.cos(a) * SHOT_SPEED
-    let x = SHOOTER_X
-    let y = SHOOTER_Y
-    const step = 5
-    let acc = 0
-    const dotEvery = R * 1.6
-
-    for (let i = 0; i < 2400; i++) {
-      const len = Math.hypot(vx, vy)
-      x += (vx / len) * step
-      y += (vy / len) * step
-      acc += step
-      if (x - R <= WALL_L) {
-        x = WALL_L + R
-        vx = Math.abs(vx)
-      }
-      if (x + R >= WALL_R) {
-        x = WALL_R - R
-        vx = -Math.abs(vx)
-      }
-      if (y <= BOARD_TOP + R) {
-        this.addTrajectoryPoint(x, y)
-        break
-      }
-      const nr = Math.floor((y - BOARD_TOP - R) / ROW_H)
-      let hit = false
-      for (
-        let row = Math.max(0, nr - 1);
-        row <= Math.min((this.board.rows.length || 0) - 1, nr + 2);
-        row++
-      ) {
-        for (
-          let col = 0;
-          col < this.layout.rowCapacity(row, this.board.gridParity);
-          col++
-        ) {
-          if (this.board.cell(row, col) !== null) {
-            const wp = this.layout.gToW(row, col, this.board.gridParity)
-            if (Math.hypot(x - wp.x, y - wp.y) < R * 1.95) {
-              hit = true
-              break
-            }
-          }
-        }
-        if (hit) break
-      }
-      if (hit) {
-        this.addTrajectoryPoint(x, y)
-        break
-      }
-      if (acc >= dotEvery) {
-        this.addTrajectoryPoint(x, y)
-        acc = 0
-        if (this.traj.length >= 38) break
-      }
-    }
+    this.rebuildTrajectoryBubbles()
+    const angle = this.aimAngle
+    const result = traceTrajectory({
+      origin: { x: SHOOTER_X, y: SHOOTER_Y },
+      velocity: {
+        x: Math.sin(angle) * SHOT_SPEED,
+        y: -Math.cos(angle) * SHOT_SPEED,
+      },
+      maxDistance: Math.max(this.layout.LH * 10, 3_000),
+      wallLeft: WALL_L + R,
+      wallRight: WALL_R - R,
+      ceilingY: BOARD_TOP + R,
+      collisionRadius: R * 1.95,
+      maxBounces: this.armedPowerUp === "waypoints" ? 4 : 2,
+      bubbles: this.trajectoryBubbles,
+      bubbleCount: this.trajectoryBubbleCount,
+      onSegment: (segment) => this.addTrajectoryDots(segment, R * 1.6),
+    })
+    if (result.terminal.kind !== "limit" && this.traj.length < 38)
+      this.addTrajectoryPoint(result.x, result.y)
   }
 
   // ─── Ball flight ─────────────────────────────────────────────────────────
 
   private updateShooting(dt: number) {
     if (!this.shots.length) return
-    const { WALL_L, WALL_R, BOARD_TOP, R, ROW_H } = this.layout
+    const { WALL_L, WALL_R, BOARD_TOP, R } = this.layout
     const sub = 4
     const sdt = dt / sub
+    this.rebuildTrajectoryBubbles()
     let unsettled = 0
     for (let shotIndex = 0; shotIndex < this.shots.length; shotIndex++) {
       const s = this.shots[shotIndex]
       if (s.settled) continue
       let placed = false
       for (let i = 0; i < sub && !placed; i++) {
-        s.x += s.vx * sdt
-        s.y += s.vy * sdt
-        if (s.x - R <= WALL_L) {
-          s.x = WALL_L + R
-          s.vx = Math.abs(s.vx)
-          this.fx.spawnWallHit(WALL_L, s.y, COLORS[s.c])
-        }
-        if (s.x + R >= WALL_R) {
-          s.x = WALL_R - R
-          s.vx = -Math.abs(s.vx)
-          this.fx.spawnWallHit(WALL_R, s.y, COLORS[s.c])
-        }
+        const result = traceTrajectory({
+          origin: { x: s.x, y: s.y },
+          velocity: { x: s.vx, y: s.vy },
+          maxDistance: Math.hypot(s.vx, s.vy) * sdt,
+          wallLeft: WALL_L + R,
+          wallRight: WALL_R - R,
+          ceilingY: BOARD_TOP + R,
+          collisionRadius: R * 1.95,
+          maxBounces: 4,
+          bubbles: this.trajectoryBubbles,
+          bubbleCount: this.trajectoryBubbleCount,
+        })
+        s.x = result.x
+        s.y = result.y
+        s.vx = result.vx
+        s.vy = result.vy
+        if (result.lastWallX !== null && result.lastWallY !== null)
+          this.fx.spawnWallHit(result.lastWallX, result.lastWallY, COLORS[s.c])
         this.fx.addTrail(s.x, s.y, COLORS[s.c])
         let snapCell = -1
-        if (s.y - R <= BOARD_TOP) {
-          s.y = BOARD_TOP + R
+        if (result.terminal.kind === "ceiling") {
           snapCell = this.findSnapCell(s.x, s.y, -1, -1)
           if (snapCell < 0) {
             // A failed snap is a resolution fallback, not a loss condition.
@@ -630,27 +695,19 @@ export class BubbleShooterEngine {
             this.abortVolleyWithoutPlacement()
             return
           }
-        } else {
-          const nr = Math.floor((s.y - BOARD_TOP - R) / ROW_H)
-          for (
-            let row = Math.max(0, nr - 1);
-            row <= Math.min((this.board.rows.length || 0) - 1, nr + 2) &&
-            snapCell < 0;
-            row++
-          ) {
-            for (
-              let col = 0;
-              col < this.layout.rowCapacity(row, this.board.gridParity) &&
-              snapCell < 0;
-              col++
-            ) {
-              if (this.board.cell(row, col) === null) continue
-              const x = this.layout.worldX(row, col, this.board.gridParity)
-              const y = this.layout.worldY(row)
-              if (Math.hypot(s.x - x, s.y - y) < R * 1.95)
-                snapCell = this.findSnapCell(s.x, s.y, row, col)
-            }
-          }
+        } else if (result.terminal.kind === "bubble") {
+          if (s.power === "rainbow")
+            s.c = this.bestRainbowColor(
+              result.terminal.row,
+              result.terminal.col,
+              s.c,
+            )
+          snapCell = this.findSnapCell(
+            s.x,
+            s.y,
+            result.terminal.row,
+            result.terminal.col,
+          )
         }
         if (snapCell >= 0) {
           const snapRow = (snapCell / CELL_STRIDE) | 0
@@ -677,6 +734,34 @@ export class BubbleShooterEngine {
       this.phase = "RESOLVE_VOLLEY"
       this.resolveActiveVolley()
     }
+  }
+
+  /**
+   * A rainbow projectile resolves to the strongest adjacent colour group at
+   * its actual impact point. This keeps the choice inside the authoritative
+   * board model instead of teaching the renderer a second matching rule.
+   */
+  private bestRainbowColor(row: number, col: number, fallback: number) {
+    let bestColor = fallback
+    let bestCount = -1
+    const candidates = [
+      { row, col },
+      ...this.layout.nbrs(row, col, this.board.gridParity),
+    ]
+    for (const candidate of candidates) {
+      const color = this.board.cell(candidate.row, candidate.col)
+      if (color === null) continue
+      const count = this.board.scanColor(
+        candidate.row,
+        candidate.col,
+        color,
+      )
+      if (count > bestCount || (count === bestCount && color === fallback)) {
+        bestColor = color
+        bestCount = count
+      }
+    }
+    return bestColor
   }
 
   private considerSnap(row: number, col: number, bx: number, by: number) {
@@ -797,11 +882,15 @@ export class BubbleShooterEngine {
       col: shot.col,
       c: shot.c,
     }))
+    const bombs = this.shots
+      .filter((shot) => shot.power === "bomb")
+      .map((shot) => ({ row: shot.row, col: shot.col }))
     const token = startDevMeasure("resolve/atomic-volley-commit")
     const result = this.board.resolveVolley(
       this.actionId,
       this.activeBoardVersion,
       placements,
+      { bombs },
     )
     endDevMeasure("resolve/atomic-volley-commit", token)
     while (this.shots.length) this.shotFree.push(this.shots.pop()!)
@@ -813,45 +902,48 @@ export class BubbleShooterEngine {
       return
     }
 
-    const matchedIds = new Set(result.matched.map((bubble) => bubble.id))
+    const removed = [...result.matched, ...result.detonated]
+    const removedIds = new Set(removed.map((bubble) => bubble.id))
     for (const bubble of result.placed) {
-      if (matchedIds.has(bubble.id)) continue
+      if (removedIds.has(bubble.id)) continue
       this.registerCommand(
         this.fx.queueLanding(this.actionId, this.toVisualBubble(bubble)),
         true,
       )
     }
 
-    if (result.matched.length) {
-      this.combo++
-      this.feverProgress = Math.min(
-        1,
-        this.feverProgress + 0.18 + Math.min(this.combo, 10) * 0.012,
-      )
-      if (this.feverProgress >= 1) {
-        this.feverActive = true
-        this.feverShots = FEVER_SHOTS
-        this.feverProgress = 0
-        this.fx.spawnPopup(
-          this.layout.SHOOTER_X,
-          this.layout.LH * 0.32,
-          "FEVER!",
-          true,
-          "#FFDE38",
+    if (removed.length) {
+      if (result.matched.length) {
+        this.combo++
+        this.feverProgress = Math.min(
+          1,
+          this.feverProgress + 0.18 + Math.min(this.combo, 10) * 0.012,
         )
+        if (this.feverProgress >= 1) {
+          this.feverActive = true
+          this.feverShots = FEVER_SHOTS
+          this.feverProgress = 0
+          this.fx.spawnPopup(
+            this.layout.SHOOTER_X,
+            this.layout.LH * 0.32,
+            "FEVER!",
+            true,
+            "#FFDE38",
+          )
+        }
+      } else {
+        this.combo = 0
       }
 
-      const matchVisuals = result.matched.map((bubble) =>
-        this.toVisualBubble(bubble),
-      )
-      const center = this.visualCenter(matchVisuals)
+      const removedVisuals = removed.map((bubble) => this.toVisualBubble(bubble))
+      const center = this.visualCenter(removedVisuals)
       this.registerCommand(
-        this.fx.queueMatch(this.actionId, matchVisuals, center.x, center.y),
+        this.fx.queueMatch(this.actionId, removedVisuals, center.x, center.y),
         true,
       )
 
       const pts =
-        result.matched.length *
+        removed.length *
         PTS_POP *
         (this.feverActive ? FEVER_SCORE_MULTIPLIER : 1)
       this.score += pts
@@ -860,17 +952,19 @@ export class BubbleShooterEngine {
           ? "AMAZING!"
           : result.matched.length >= 5
             ? "AWESOME!"
-            : ""
+            : result.detonated.length
+              ? "BOOM!"
+              : ""
       if (label)
         this.fx.spawnPopup(
           this.layout.SHOOTER_X,
           this.layout.LH * 0.42,
           label,
           true,
-          "#FFE04B",
+          result.detonated.length ? "#FF9418" : "#FFE04B",
         )
       this.fx.spawnPopup(center.x, center.y - 24, `+${pts}`, false, "#FFE04B")
-      for (const bubble of matchVisuals)
+      for (const bubble of removedVisuals)
         this.fx.spawnPop(bubble.x, bubble.y, COLORS[bubble.c])
       if (this.combo > 1) this.fx.markCombo(this.combo, center.x, center.y - 70)
     } else {
@@ -894,7 +988,7 @@ export class BubbleShooterEngine {
           center.y,
           this.layout.LH + 100 - minLocalY,
           (group.groupId & 1 ? -1 : 1) * 5,
-          result.matched.length ? 0.16 : 0,
+          removed.length ? 0.16 : 0,
         ),
         true,
       )

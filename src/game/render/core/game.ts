@@ -79,6 +79,8 @@ export class PixiGame {
           this.engine.layout.maxBoardBubbleCount(this.engine.board.gridParity),
           (commandId, actionId, kind) =>
             this.engine.notifyAnimationComplete(commandId, actionId, kind),
+          () => this.engine.consumeNextDown(),
+          (powerUp) => this.engine.activatePowerUp(powerUp),
         ),
     )
     this.hud = new HudLayer(this.uiLayer, this.textures, {

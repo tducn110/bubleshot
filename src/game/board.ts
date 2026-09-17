@@ -13,6 +13,11 @@ const WORKSPACE_ROWS = 64
 const WORKSPACE_STRIDE = 9
 const WORKSPACE_CELLS = WORKSPACE_ROWS * WORKSPACE_STRIDE
 
+export interface VolleyResolutionOptions {
+  /** Grid centres of bomb projectiles that settled in this atomic volley. */
+  readonly bombs?: readonly GridPos[]
+}
+
 export class Board {
   readonly rows: (number | null)[][] = []
   readonly ids: (number | null)[][] = []
@@ -271,6 +276,7 @@ export class Board {
     actionId: number,
     expectedBoardVersion: number,
     placements: readonly VolleyPlacement[],
+    options: VolleyResolutionOptions = {},
   ): ResolveResult {
     const emptyResult = (): ResolveResult => ({
       actionId,
@@ -279,6 +285,7 @@ export class Board {
       stale: true,
       placed: [],
       matched: [],
+      detonated: [],
       floatingGroups: [],
     })
 
@@ -299,6 +306,7 @@ export class Board {
 
     const placed: ResolvedBubble[] = []
     const matched: ResolvedBubble[] = []
+    const detonated: ResolvedBubble[] = []
     const floatingGroups: FloatingGroupResult[] = []
 
     this.batch(() => {
@@ -313,6 +321,26 @@ export class Board {
             col: placement.col,
           })
       }
+
+      const detonationGeneration = this.nextResolveGeneration()
+      for (const bomb of options.bombs ?? []) {
+        const targets = [
+          bomb,
+          ...this.layout.nbrs(bomb.row, bomb.col, this.gridParity),
+        ]
+        for (const target of targets) {
+          if (!this.layout.cellValid(target.row, target.col, this.gridParity))
+            continue
+          const encoded = this.encode(target.row, target.col)
+          if (this.resolveVisited[encoded] === detonationGeneration) continue
+          this.resolveVisited[encoded] = detonationGeneration
+          const c = this.cell(target.row, target.col)
+          const id = this.id(target.row, target.col)
+          if (c !== null && id !== null)
+            detonated.push({ id, c, row: target.row, col: target.col })
+        }
+      }
+      for (const bubble of detonated) this.set(bubble.row, bubble.col, null)
 
       const matchGeneration = this.nextResolveGeneration()
       for (const placement of placements) {
@@ -340,7 +368,7 @@ export class Board {
       }
       for (const bubble of matched) this.set(bubble.row, bubble.col, null)
 
-      if (!matched.length) return
+      if (!matched.length && !detonated.length) return
 
       const ceilingGeneration = this.nextScanGeneration()
       let head = 0
@@ -475,6 +503,7 @@ export class Board {
       stale: false,
       placed,
       matched,
+      detonated,
       floatingGroups,
     }
   }

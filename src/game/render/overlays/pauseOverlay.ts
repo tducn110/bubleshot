@@ -80,8 +80,8 @@ function makeToggle(): ToggleVisual {
         .roundRect(-20, -10, 40, 20, 10)
         .fill({
           color: enabled
-            ? LEADERBOARD_PALETTE.border
-            : LEADERBOARD_PALETTE.text,
+            ? LEADERBOARD_PALETTE.purple
+            : LEADERBOARD_PALETTE.border,
           alpha: 0.98,
         })
         .stroke({
@@ -165,7 +165,7 @@ function makeSettingRow(
     anchor: 0.5,
     label: `${key}Icon`,
   })
-  const text = makeText(label, 15, 600, LEADERBOARD_PALETTE.frame)
+  const text = makeText(label, 15, 600, LEADERBOARD_PALETTE.dark)
   const separator = new Graphics({ label: `${key}Separator` })
   const toggle = makeToggle()
   root.addChild(separator, icon, text, toggle.root)
@@ -200,7 +200,7 @@ function makeLanguageRow(
     i18n.t("settings.language"),
     15,
     600,
-    LEADERBOARD_PALETTE.frame,
+    LEADERBOARD_PALETTE.dark,
   )
   const value = makeText(
     currentLanguageLabel(),
@@ -231,7 +231,7 @@ export class PauseOverlay {
     "TẠM DỪNG",
     24,
     800,
-    LEADERBOARD_PALETTE.white,
+    LEADERBOARD_PALETTE.dark,
     0.5,
   )
   private readonly continueButton
@@ -334,11 +334,11 @@ export class PauseOverlay {
     this.panelFill
       .clear()
       .roundRect(0, 0, panelWidth, panelHeight, radius)
-      .fill({ color: LEADERBOARD_PALETTE.dark, alpha: 0.98 })
+      .fill({ color: LEADERBOARD_PALETTE.frame, alpha: 0.98 })
     this.panelBorder
       .clear()
       .roundRect(0, 0, panelWidth, panelHeight, radius)
-      .stroke({ color: LEADERBOARD_PALETTE.border, alpha: 0.72, width: 1 })
+      .stroke({ color: LEADERBOARD_PALETTE.border, alpha: 0.9, width: 1.5 })
     this.panel.hitArea = new Rectangle(0, 0, panelWidth, panelHeight)
 
     this.title.position.set(panelWidth / 2, padding + titleHeight / 2)
@@ -391,9 +391,13 @@ export class PauseOverlay {
     this.hapticsRow.toggle.setEnabled(this.settings.value.hapticsEnabled)
     this.languageRow.label.text = i18n.t("settings.language")
     this.languageRow.value.text = currentLanguageLabel()
+    this.musicRow.icon.tint = LEADERBOARD_PALETTE.purple
     this.sfxRow.icon.texture = this.settings.value.sfxEnabled
       ? this.icons.volume
       : this.icons.volumeX
+    this.sfxRow.icon.tint = LEADERBOARD_PALETTE.purple
+    this.hapticsRow.icon.tint = LEADERBOARD_PALETTE.purple
+    this.languageRow.icon.tint = LEADERBOARD_PALETTE.purple
   }
 
   setSuppressed(suppressed: boolean) {

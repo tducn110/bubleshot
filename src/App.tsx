@@ -11,7 +11,16 @@ export default function App() {
     const criticalPromise = preloadCriticalResources((pct) => {
       setGameLoadingProgress(Math.min(95, pct));
     });
-    void Promise.allSettled([criticalPromise]).then(() => {
+    const winkPromise = new Promise<void>((resolve) => {
+      if (typeof window === "undefined") return resolve();
+      let attempts = 0;
+      const check = () => {
+        if ((window as any).Wink || (window as any).WinkBridge || attempts > 20) resolve();
+        else { attempts++; setTimeout(check, 100); }
+      };
+      check();
+    });
+    void Promise.allSettled([criticalPromise, winkPromise]).then(() => {
       completeGameLoading();
     });
     const unbind = onGameLoadingDismiss(() => {

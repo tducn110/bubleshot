@@ -383,7 +383,8 @@ export class LeaderboardOverlay {
     winkGame
       .refreshLeaderboard()
       .then((res) => {
-        if (res?.entries && res.entries.length > 0) {
+        if (res?.entries) {
+          const playerName = winkGame.displayName || (res.me?.displayName ?? "BẠN")
           this.setData({
             entries: res.entries.map((e) => ({
               rank: e.rank,
@@ -391,14 +392,12 @@ export class LeaderboardOverlay {
               score: e.score,
               avatar: null,
             })),
-            currentPlayer: res.me
-              ? {
-                  name: res.me.displayName || "BẠN",
-                  score: res.me.score,
-                  rank: res.me.rank,
-                  avatar: null,
-                }
-              : this.data.currentPlayer,
+            currentPlayer: {
+              name: playerName,
+              score: res.me?.score ?? (this.data.currentPlayer?.score ?? 0),
+              rank: res.me?.rank ?? (this.data.currentPlayer?.rank ?? null),
+              avatar: null,
+            },
           })
         }
       })
