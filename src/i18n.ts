@@ -12,15 +12,21 @@ const getInitialLanguage = (): SupportedLanguage => {
   } catch {
     // Storage read failure fallback
   }
-  // Contract: Wink-hosted initial language = Wink.locale if supported, otherwise English.
-  const winkLocale = (window as any).Wink?.locale;
-  if (typeof winkLocale === "string") {
-    const normalized = winkLocale.split("-")[0];
-    if (isSupportedLanguage(normalized)) return normalized;
-  }
+  
   return "en";
 };
-const persistLanguage = (language: string): void => { const normalized = language.split("-")[0]; if (typeof window === "undefined" || !isSupportedLanguage(normalized)) return; try { window.localStorage.setItem(LANGUAGE_STORAGE_KEY, normalized); } catch { /* Optional persistence. */ } };
+
+const persistLanguage = (language: string): void => {
+  const normalized = language.split("-")[0];
+  if (typeof window === "undefined" || !isSupportedLanguage(normalized)) return;
+  try { window.localStorage.setItem(LANGUAGE_STORAGE_KEY, normalized); } catch { /* Optional persistence. */ }
+};
+
+const syncDocumentLang = (language: string): void => {
+  if (typeof document === "undefined") return;
+  const normalized = language.split("-")[0];
+  document.documentElement.lang = isSupportedLanguage(normalized) ? normalized : "en";
+};
 
 const resources = {
   vi: {
@@ -32,6 +38,24 @@ const resources = {
         back: "Quay lại",
         close: "Đóng",
         retry: "Chơi lại",
+        score: "Điểm",
+        play_again: "Chơi lại",
+      },
+      game: {
+        level_clear: "VƯỢT ẢI!",
+        you_lose: "BẠN ĐÃ THUA RỒI",
+        retry: "LẠI",
+        next: "TIẾP",
+        play_again: "CHƠI LẠI",
+        score: "ĐIỂM",
+        rank: "HẠNG",
+      },
+      leaderboard: {
+        title: "BẢNG XẾP HẠNG",
+        subtitle: "TOP 10 CAO THỦ",
+        you: "BẠN",
+        rank: "HẠNG",
+        anonymous: "ẨN DANH",
       },
       settings: {
         title: "Cài đặt",
@@ -53,6 +77,24 @@ const resources = {
         back: "Back",
         close: "Close",
         retry: "Play again",
+        score: "Score",
+        play_again: "Play again",
+      },
+      game: {
+        level_clear: "LEVEL CLEAR!",
+        you_lose: "YOU LOST!",
+        retry: "RETRY",
+        next: "NEXT",
+        play_again: "PLAY AGAIN",
+        score: "SCORE",
+        rank: "RANK",
+      },
+      leaderboard: {
+        title: "LEADERBOARD",
+        subtitle: "TOP 10 PLAYERS",
+        you: "YOU",
+        rank: "RANK",
+        anonymous: "ANONYMOUS",
       },
       settings: {
         title: "Settings",
@@ -67,15 +109,21 @@ const resources = {
   },
 } as const;
 
+const initialLanguage = getInitialLanguage();
+syncDocumentLang(initialLanguage);
+
 void i18n
   .use(initReactI18next)
   .init({
     resources,
-    lng: getInitialLanguage(),
+    lng: initialLanguage,
     supportedLngs: ["vi", "en"],
     fallbackLng: "en",
     interpolation: { escapeValue: false },
   });
-i18n.on("languageChanged", persistLanguage);
+i18n.on("languageChanged", (lang) => {
+  persistLanguage(lang);
+  syncDocumentLang(lang);
+});
 
 export default i18n;

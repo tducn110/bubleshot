@@ -11,6 +11,7 @@ import type { GameView } from "../../types"
 import type { GameTextures } from "../core/textures"
 import { GAME_FONT_STACK } from "../core/typography"
 import { LEADERBOARD_PALETTE } from "../core/colors"
+import i18n from "../../../i18n"
 
 export interface HudActions {
   /** Notify the application shell that the player requested the dashboard. */
@@ -117,7 +118,7 @@ export class HudLayer {
   private readonly scoreRegion = new Container({ label: "ScoreRegion" })
   private readonly actionRegion = new Container({ label: "ActionRegion" })
   private readonly scoreLabel = makeText(
-    "ĐIỂM",
+    i18n.t("game.score", "SCORE").toUpperCase(),
     10,
     900,
     LEADERBOARD_PALETTE.text,
@@ -209,6 +210,7 @@ export class HudLayer {
   }
 
   sync(view: GameView) {
+    this.scoreLabel.text = i18n.t("game.score", "SCORE").toUpperCase()
     const score = view.score.toLocaleString()
     if (score !== this.lastScore) {
       this.scoreValue.text = score

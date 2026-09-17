@@ -25,6 +25,7 @@ import type { GameTextures } from "../core/textures"
 import { GAME_FONT_STACK } from "../core/typography"
 import { LEADERBOARD_PALETTE } from "../core/colors"
 import { winkGame } from "../../../integrations/wink/client"
+import i18n from "../../../i18n"
 
 const C = {
   ...LEADERBOARD_PALETTE,
@@ -302,8 +303,8 @@ export class LeaderboardOverlay {
     anchor: 0.5,
     label: "LeaderboardTrophyIcon",
   })
-  private readonly title = label("BẢNG XẾP HẠNG", 22, 800, C.text, 0.5)
-  private readonly subtitle = label("TOP 10 CAO THỦ", 11, 700, C.muted, 0.5)
+  private readonly title = label(i18n.t("leaderboard.title", "BẢNG XẾP HẠNG"), 22, 800, C.text, 0.5)
+  private readonly subtitle = label(i18n.t("leaderboard.subtitle", "TOP 10 CAO THỦ"), 11, 700, C.muted, 0.5)
   private readonly frame = new Container({ label: "LeaderboardContentFrame" })
   private readonly frameFill = new Graphics({
     label: "LeaderboardContentFrameBackground",
@@ -317,9 +318,9 @@ export class LeaderboardOverlay {
     label: "LeaderboardCurrentPlayerBackground",
   })
   private readonly currentAvatar: Avatar
-  private readonly currentName = label("BẠN", 15, 800, C.text)
+  private readonly currentName = label(i18n.t("leaderboard.you", "BẠN"), 15, 800, C.text)
   private readonly currentScore = label("0", 22, 800, C.text)
-  private readonly currentRankLabel = label("HẠNG", 10, 700, C.muted, 0.5)
+  private readonly currentRankLabel = label(i18n.t("leaderboard.rank", "HẠNG"), 10, 700, C.muted, 0.5)
   private readonly currentRank = label("—", 24, 800, C.text, 0.5)
   private readonly textures: GameTextures
   private cards: Podium[] = []
@@ -384,11 +385,11 @@ export class LeaderboardOverlay {
       .refreshLeaderboard()
       .then((res) => {
         if (res?.entries) {
-          const playerName = winkGame.displayName || (res.me?.displayName ?? "BẠN")
+          const playerName = winkGame.displayName || (res.me?.displayName ?? i18n.t("leaderboard.you", "BẠN"))
           this.setData({
             entries: res.entries.map((e) => ({
               rank: e.rank,
-              name: e.displayName || "ẨN DANH",
+              name: e.displayName || i18n.t("leaderboard.anonymous", "ẨN DANH"),
               score: e.score,
               avatar: null,
             })),
@@ -535,9 +536,12 @@ export class LeaderboardOverlay {
     )
   }
   sync(view: GameView) {
+    this.title.text = i18n.t("leaderboard.title", "BẢNG XẾP HẠNG")
+    this.subtitle.text = i18n.t("leaderboard.subtitle", "TOP 10 CAO THỦ")
+    this.currentRankLabel.text = i18n.t("leaderboard.rank", "HẠNG")
     const p = this.data.currentPlayer
     this.currentName.text = truncateLeaderboardName(
-      p?.name || "BẠN",
+      p?.name || i18n.t("leaderboard.you", "BẠN"),
       this.currentNameLimit,
     )
     this.currentScore.text = formatLeaderboardScore(view.score)

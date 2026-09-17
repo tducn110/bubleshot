@@ -1,3 +1,5 @@
+import i18n from "../i18n"
+
 export interface LeaderboardEntry {
   rank: number
   name: string
@@ -42,7 +44,7 @@ export const DEMO_LEADERBOARD_ENTRIES: readonly LeaderboardEntry[] = [
 
 export const DEMO_LEADERBOARD_DATA: LeaderboardData = {
   entries: DEMO_LEADERBOARD_ENTRIES,
-  currentPlayer: { name: "BẠN", score: 0, rank: null, avatar: null },
+  currentPlayer: { name: i18n.t("leaderboard.you", "YOU"), score: 0, rank: null, avatar: null },
 }
 
 export function topLeaderboardEntries(
@@ -66,7 +68,7 @@ export function truncateLeaderboardName(
   name: string | undefined,
   maxCharacters = 18,
 ): string {
-  const safeName = name?.trim() || "ẨN DANH"
+  const safeName = name?.trim() || i18n.t("leaderboard.anonymous", "ANONYMOUS")
   const limit = Math.max(2, Math.floor(maxCharacters))
   return safeName.length > limit ? `${safeName.slice(0, limit - 1)}…` : safeName
 }
