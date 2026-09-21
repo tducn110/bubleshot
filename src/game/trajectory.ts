@@ -113,7 +113,7 @@ export function traceTrajectory(
       const relX = x - bubble.x
       const relY = y - bubble.y
       const projection = -(relX * dx + relY * dy)
-      if (projection <= EPSILON || projection >= distance) continue
+      if (projection <= EPSILON) continue
       const closestSquared = relX * relX + relY * relY - projection * projection
       const radiusSquared = options.collisionRadius * options.collisionRadius
       if (closestSquared > radiusSquared) continue
