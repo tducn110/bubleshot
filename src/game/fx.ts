@@ -149,6 +149,7 @@ export class Fx {
     rotation: number,
     delay: number,
     duration = 0.58,
+    pointsPerBubble?: number,
   ): DropAnimationCommand {
     return this.pushCommand({
       id: this.nextCommandId++,
@@ -162,6 +163,7 @@ export class Fx {
       rotation,
       delay,
       duration,
+      pointsPerBubble,
     })
   }
 

@@ -30,6 +30,7 @@ interface AnimationHooks {
   ) => ClaimedBubble
   getBoardBubble: (id: number) => BubbleVisual | undefined
   complete: (commandId: number, actionId: number, kind: AnimationKind) => void
+  onDropBounced?: (bubble: VisualBubble, x: number, y: number) => void
 }
 
 interface ActiveAnimation {
@@ -271,27 +272,93 @@ export class GameplayAnimations {
       command.originX,
       command.originY,
     )
-    const duration = this.duration(command.duration)
+
+    const dangerY = command.targetY
     const timeline = gsap.timeline({
       paused: this.paused,
       delay: this.duration(command.delay),
       onComplete: () => this.finish(command),
     })
-    timeline
-      .to(group, {
-        pixi: { y: command.targetY, rotation: command.rotation },
-        duration,
+
+    for (let i = 0; i < claims.length; i++) {
+      const claim = claims[i]
+      const member = command.members[i]
+      const initialLocalX = member.x - command.originX
+      const initialLocalY = member.y - command.originY
+
+      // Stagger slightly so bubbles cascade naturally (bubbo-bubbo dynamic cluster feel)
+      const stagger = this.duration(Math.min(0.08, (i % 6) * 0.015))
+
+      // Initial impulse: slight random lateral spread + upward hop
+      const seed = Math.sin(member.id * 12.9898 + i)
+      const spreadX = seed * 30
+      const hopY = -12 - Math.abs(Math.cos(member.id * 78.233)) * 8
+
+      // Target bounce location on the danger line
+      const targetLocalY = dangerY - command.originY
+      const bounceX = initialLocalX + spreadX
+      const bounceHeight = Math.max(
+        32,
+        Math.min(58, (dangerY - member.y) * 0.15),
+      )
+
+      // Dynamic fall time based on distance
+      const fallTime = this.duration(0.25)
+      const bounceUpTime = this.duration(0.12)
+      const fallOffTime = this.duration(0.15)
+
+      const bubbleTl = gsap.timeline()
+
+      // 1. Pop loose: slight upward hop and lateral expansion
+      bubbleTl.to(claim.visual, {
+        x: initialLocalX + spreadX * 0.25,
+        y: initialLocalY + hopY,
+        duration: this.duration(0.06),
+        ease: "power1.out",
+      })
+
+      // 2. Accelerate down under gravity to the danger line
+      bubbleTl.to(claim.visual, {
+        x: bounceX,
+        y: targetLocalY,
+        duration: fallTime,
+        ease: "power2.in",
+        onComplete: () => {
+          // Impact on the danger line: pulses danger line and plays cheerful bounce sfx
+          this.hooks.onDropBounced?.(member, command.originX + bounceX, dangerY)
+        },
+      })
+
+      // 3. Bounce upward from the danger line with damping
+      bubbleTl.to(claim.visual, {
+        x: bounceX + spreadX * 0.35,
+        y: targetLocalY - bounceHeight,
+        duration: bounceUpTime,
+        ease: "power2.out",
+      })
+
+      // 4. Final descent past the bottom of the screen
+      bubbleTl.to(claim.visual, {
+        x: bounceX + spreadX * 0.65,
+        y: targetLocalY + 120,
+        duration: fallOffTime,
         ease: "power2.in",
       })
-      .to(
-        group,
+
+      // 5. Fade out and scale down during final descent
+      bubbleTl.to(
+        claim.visual,
         {
-          pixi: { alpha: 0 },
-          duration: duration * 0.24,
+          pixi: { alpha: 0, scale: 0.72 },
+          duration: fallOffTime * 0.85,
           ease: "power1.in",
         },
-        `-=${duration * 0.24}`,
+        `-=${fallOffTime * 0.85}`,
       )
+
+      timeline.add(bubbleTl, stagger)
+    }
+
     this.active.set(command.id, {
       animation: timeline,
       command,

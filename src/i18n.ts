@@ -28,6 +28,11 @@ const persistLanguage = (language: string): void => {
   }
 }
 
+export const formatNumber = (value: number, lang?: string): string => {
+  const current = lang || i18n.resolvedLanguage || i18n.language || "en"
+  return value.toLocaleString(current.startsWith("vi") ? "vi-VN" : "en-US")
+}
+
 const syncDocumentLang = (language: string): void => {
   if (typeof document === "undefined") return
   const normalized = language.split("-")[0]
@@ -57,6 +62,7 @@ const resources = {
         play_again: "CHƠI LẠI",
         score: "ĐIỂM",
         rank: "HẠNG",
+        stage: "MÀN",
       },
       leaderboard: {
         title: "BẢNG XẾP HẠNG",
@@ -96,6 +102,7 @@ const resources = {
         play_again: "PLAY AGAIN",
         score: "SCORE",
         rank: "RANK",
+        stage: "STAGE",
       },
       leaderboard: {
         title: "LEADERBOARD",
@@ -123,7 +130,7 @@ syncDocumentLang(initialLanguage)
 void i18n.use(initReactI18next).init({
   resources,
   lng: initialLanguage,
-  supportedLngs: ["vi", "en"],
+  supportedLngs: ["en", "vi"],
   fallbackLng: "en",
   interpolation: { escapeValue: false },
 })

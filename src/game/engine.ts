@@ -317,7 +317,7 @@ export class BubbleShooterEngine {
     const l = this.sToL(e.clientX, e.clientY)
     this.plx = l.x
     this.ply = l.y
-    if (this.canShoot) {
+    if (this.canShoot && !this.isAimCancelled(this.plx, this.ply)) {
       this.doShoot()
     }
     this.clearTrajectory()
@@ -511,14 +511,24 @@ export class BubbleShooterEngine {
 
   // ─── Aim / shoot ───────────────────────────────────────────────────────────
 
-  private aimAngleFor(pointerX: number, pointerY: number) {
+  /** Determines if pointer drag gesture is in the cancellation zone (below shooter or near base). */
+  private isAimCancelled(pointerX: number, pointerY: number): boolean {
     const { SHOOTER_X, SHOOTER_Y } = this.layout
     const dx = pointerX - SHOOTER_X
     const dy = pointerY - SHOOTER_Y
-    if (Math.hypot(dx, dy) < 35) return 0
-    if (dy >= -5) return dx >= 0 ? Math.PI * 0.78 : -Math.PI * 0.78
+    return dy > 25 || Math.hypot(dx, dy) < 32
+  }
+
+  private aimAngleFor(pointerX: number, pointerY: number) {
+    if (this.isAimCancelled(pointerX, pointerY)) return 0
+    const { SHOOTER_X, SHOOTER_Y } = this.layout
+    const dx = pointerX - SHOOTER_X
+    const dy = pointerY - SHOOTER_Y
+    // Maximum legal shooting angle (~73.8 deg from vertical); projectile always climbs upward
+    const maxAngle = Math.PI * 0.41
+    if (dy >= -5) return dx >= 0 ? maxAngle : -maxAngle
     const a = Math.atan2(dx, -dy)
-    return Math.max(-Math.PI * 0.82, Math.min(Math.PI * 0.82, a))
+    return Math.max(-maxAngle, Math.min(maxAngle, a))
   }
 
   private doShoot() {
@@ -676,7 +686,7 @@ export class BubbleShooterEngine {
       return
     }
     const show = this.isAiming || this.lastPointerType === "mouse"
-    if (!show) {
+    if (!show || this.isAimCancelled(this.plx, this.ply)) {
       this.clearTrajectory()
       return
     }
@@ -716,6 +726,10 @@ export class BubbleShooterEngine {
     for (let shotIndex = 0; shotIndex < this.shots.length; shotIndex++) {
       const s = this.shots[shotIndex]
       if (s.settled) continue
+      if (s.y > this.layout.LH + 40 || s.y < this.layout.BOARD_TOP - 100) {
+        this.abortVolleyWithoutPlacement()
+        return
+      }
       let placed = false
       for (let i = 0; i < sub && !placed; i++) {
         const result = traceTrajectory({
@@ -763,6 +777,10 @@ export class BubbleShooterEngine {
             result.terminal.row,
             result.terminal.col,
           )
+          if (snapCell < 0) {
+            this.abortVolleyWithoutPlacement()
+            return
+          }
         }
         if (snapCell >= 0) {
           const snapRow = (snapCell / CELL_STRIDE) | 0
@@ -895,6 +913,12 @@ export class BubbleShooterEngine {
         by,
       )
     }
+    if (this.snapBestCell < 0 && hitRow >= 0) {
+      const ring1 = this.layout.nbrs(hitRow, hitCol, this.board.gridParity)
+      for (const n1 of ring1) {
+        this.considerSnapNeighbors(n1.row, n1.col, bx, by)
+      }
+    }
     return this.snapBestCell
   }
 
@@ -1026,13 +1050,15 @@ export class BubbleShooterEngine {
     }
 
     let floatingCount = 0
+    const baseDelay = removed.length ? 0.16 : 0
+    const dropPtsPerBubble =
+      PTS_DROP * (this.feverActive ? FEVER_SCORE_MULTIPLIER : 1)
+
     for (const group of result.floatingGroups) {
       const members = group.members.map((bubble) => this.toVisualBubble(bubble))
       floatingCount += members.length
       const center = this.visualCenter(members)
-      let minLocalY = 0
-      for (const member of members)
-        minLocalY = Math.min(minLocalY, member.y - center.y)
+
       this.registerCommand(
         this.fx.queueDrop(
           this.actionId,
@@ -1040,21 +1066,23 @@ export class BubbleShooterEngine {
           members,
           center.x,
           center.y,
-          this.layout.LH + 100 - minLocalY,
+          this.layout.DANGER_Y,
           (group.groupId & 1 ? -1 : 1) * 5,
-          removed.length ? 0.16 : 0,
+          baseDelay,
+          0.58,
+          dropPtsPerBubble,
         ),
         true,
       )
     }
     if (floatingCount) {
-      const pts = floatingCount * PTS_DROP
-      this.score += pts
+      const totalDropPoints = floatingCount * dropPtsPerBubble
+      this.score += totalDropPoints
       if (floatingCount >= 4)
         this.fx.spawnPopup(
           this.layout.SHOOTER_X,
           this.layout.DANGER_Y - 60,
-          `+${pts} DROP!`,
+          `+${totalDropPoints} DROP!`,
           false,
           "#C77DFF",
         )

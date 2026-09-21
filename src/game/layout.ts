@@ -242,6 +242,7 @@ export class Layout {
   cellValid(row: number, col: number, gridParity: GridParity = 0) {
     return row >= 0 && col >= 0 && col < this.rowCapacity(row, gridParity)
   }
+
   /**
    * Structural upper bound for simultaneous floating bubbles in a legal
    * resolve. `findFloating()` always marks row 0 as ceiling-connected, so a

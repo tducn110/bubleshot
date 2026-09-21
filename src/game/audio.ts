@@ -245,6 +245,34 @@ class SoundSystem {
     osc.stop(now + 0.25)
   }
 
+  /**
+   * Authentic bubble bounce sfx when dropped bubbles bounce on the bounce line (bubbo-bubbo style).
+   */
+  playBubbleBounce(pitchScale = 1.0) {
+    if (!this.canPlaySfx()) return
+    const ctx = this.ensureContext()
+    if (!ctx) return
+
+    const now = ctx.currentTime
+    const osc = ctx.createOscillator()
+    const gain = ctx.createGain()
+
+    const baseFreq = (200 + Math.random() * 50) * pitchScale
+    osc.type = "sine"
+    osc.frequency.setValueAtTime(baseFreq * 0.85, now)
+    osc.frequency.exponentialRampToValueAtTime(baseFreq * 1.5, now + 0.035)
+    osc.frequency.exponentialRampToValueAtTime(baseFreq * 0.95, now + 0.11)
+
+    gain.gain.setValueAtTime(0.2, now)
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.12)
+
+    osc.connect(gain)
+    gain.connect(this.getSfxDestination(ctx))
+
+    osc.start(now)
+    osc.stop(now + 0.13)
+  }
+
   /** Swap current and next bubbles */
   playSwap() {
     if (!this.canPlaySfx()) return

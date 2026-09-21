@@ -56,4 +56,67 @@ describe("BubbleShooterEngine aim input", () => {
     expect(engine.shots).toHaveLength(1)
     engine.destroy()
   })
+
+  it("cancels shot when pointer is released in the cancel zone below shooter", () => {
+    const engine = new BubbleShooterEngine(fakeCanvas())
+    engine.activate()
+    const input = engine as unknown as {
+      isAiming: boolean
+      onDown: (event: PointerEvent) => void
+      onMove: (event: PointerEvent) => void
+      onUp: (event: PointerEvent) => void
+    }
+
+    // Aim started above
+    input.onDown(pointer(1))
+    expect(input.isAiming).toBe(true)
+
+    // Dragged below shooter Y (~710)
+    input.onMove({
+      pointerId: 1,
+      pointerType: "touch",
+      clientX: 195,
+      clientY: 780,
+      preventDefault: () => {},
+    } as PointerEvent)
+
+    // Releasing in cancel zone cancels the shot
+    input.onUp({
+      pointerId: 1,
+      pointerType: "touch",
+      clientX: 195,
+      clientY: 780,
+      preventDefault: () => {},
+    } as PointerEvent)
+
+    expect(engine.phase).toBe("READY")
+    expect(engine.shots).toHaveLength(0)
+    expect(engine.traj).toHaveLength(0)
+    engine.destroy()
+  })
+
+  it("clamps aim angle so shots always fly strictly upward", () => {
+    const engine = new BubbleShooterEngine(fakeCanvas())
+    engine.activate()
+    const aimAngleFor = (engine as unknown as {
+      aimAngleFor: (x: number, y: number) => number
+    }).aimAngleFor.bind(engine)
+
+    // Straight up
+    expect(aimAngleFor(195, 200)).toBeCloseTo(0, 2)
+
+    // Far right horizontal
+    const rightAngle = aimAngleFor(500, 710)
+    expect(rightAngle).toBeLessThanOrEqual(Math.PI * 0.42)
+    expect(rightAngle).toBeGreaterThan(0)
+    expect(-Math.cos(rightAngle)).toBeLessThan(0) // upward vy
+
+    // Far left horizontal
+    const leftAngle = aimAngleFor(0, 710)
+    expect(leftAngle).toBeGreaterThanOrEqual(-Math.PI * 0.42)
+    expect(leftAngle).toBeLessThan(0)
+    expect(-Math.cos(leftAngle)).toBeLessThan(0) // upward vy
+
+    engine.destroy()
+  })
 })

@@ -6,7 +6,8 @@ import {
   Text,
   type TextStyleOptions,
 } from "pixi.js"
-import { COLORS } from "../../config"
+import { COLORS, FEVER_SCORE_MULTIPLIER, PTS_DROP } from "../../config"
+import { gameAudio } from "../../audio"
 import type {
   AnimationKind,
   GameView,
@@ -172,6 +173,10 @@ export class SceneLayers {
   private trajectory = new Graphics({ label: "Trajectory" })
   private dangerLine: Sprite
   private dangerMarker: Sprite
+  private dangerTex: ReturnType<typeof makeDangerLineTexture> | null = null
+  private dangerPulse = 0
+  private currentFx: GameView["fx"] | null = null
+  private currentFever = false
   private readonly powerUps = ["rows3", "bomb", "rainbow", "waypoints"] as const
   private readonly powerUpButtons: Array<{
     root: Container
@@ -198,7 +203,6 @@ export class SceneLayers {
   private popupColorKeys: string[] = []
   private popupFree: Text[] = []
   private shotSprites: BubbleVisual[]
-  private dangerTex: ReturnType<typeof makeDangerLineTexture> | null = null
   private cannon: CannonContainer
   private debugLayout: Graphics | null = DEBUG_LAYOUT ? new Graphics() : null
   private lastBoardVersion = -1
@@ -237,10 +241,10 @@ export class SceneLayers {
       this.bg,
       this.wallGuides,
       this.boardLayer,
-      this.fxLayer,
-      this.shotLayer,
       this.dangerLine,
       this.dangerMarker,
+      this.fxLayer,
+      this.shotLayer,
     )
     if (this.debugLayout) parent.addChild(this.debugLayout)
     this.shotSprites = Array.from({ length: 4 }, () => new BubbleVisual(t))
@@ -297,6 +301,19 @@ export class SceneLayers {
           this.claimAnimationBubble(bubble, kind, parent),
         getBoardBubble: (id) => this.boardSprites.get(id),
         complete: onAnimationComplete,
+        onDropBounced: (bubble, x, y) => {
+          this.pulseDanger(1.0)
+          gameAudio.playBubbleBounce()
+          const pts =
+            PTS_DROP * (this.currentFever ? FEVER_SCORE_MULTIPLIER : 1)
+          this.currentFx?.spawnPopup(
+            x,
+            y - 24,
+            `+${pts}`,
+            this.currentFever,
+            this.currentFever ? "#FFE04B" : COLORS[bubble.c],
+          )
+        },
       },
       dropPoolCapacity,
     )
@@ -381,6 +398,8 @@ export class SceneLayers {
   }
 
   sync(v: GameView, t: GameTextures) {
+    this.currentFx = v.fx
+    this.currentFever = v.feverActive
     const l = v.layout
     const baseScale = l.R / TEX_BR
     this.currentBaseScale = baseScale
@@ -429,6 +448,7 @@ export class SceneLayers {
   }
 
   destroy() {
+    this.dangerTex?.destroy(true)
     this.animations.destroy()
   }
 
@@ -442,7 +462,7 @@ export class SceneLayers {
     return false
   }
 
-  private rebuildDanger(v: GameView, t: GameTextures) {
+  private rebuildDanger(v: GameView, _t: GameTextures) {
     this.dangerTex?.destroy(true)
     this.dangerTex = makeDangerLineTexture(v.layout, this.lastNear)
     this.dangerLine.texture = this.dangerTex
@@ -693,6 +713,15 @@ export class SceneLayers {
       this.lastNear = near
       this.rebuildDanger(v, t)
     }
-    this.dangerLine.alpha = near ? 0.62 + Math.sin(v.fx.pulse * 6) * 0.18 : 0.42
+    if (this.dangerPulse > 0) {
+      this.dangerPulse = Math.max(0, this.dangerPulse - 0.04)
+    }
+    const baseAlpha = near ? 0.62 + Math.sin(v.fx.pulse * 6) * 0.18 : 0.42
+    this.dangerLine.alpha = Math.min(1.0, Math.max(baseAlpha, this.dangerPulse))
+    this.dangerMarker.alpha = near ? 0.9 : 0.55
+  }
+
+  pulseDanger(intensity = 1.0) {
+    this.dangerPulse = Math.max(this.dangerPulse, intensity)
   }
 }

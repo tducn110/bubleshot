@@ -114,6 +114,7 @@ export interface DropAnimationCommand extends AnimationCommandBase {
   originY: number
   targetY: number
   rotation: number
+  pointsPerBubble?: number
 }
 
 export type AnimationCommand = ImpactAnimationCommand | LandingAnimationCommand | MatchAnimationCommand | DropAnimationCommand
