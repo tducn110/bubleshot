@@ -173,6 +173,8 @@ export class BubbleShooterEngine {
   private _kd: (e: KeyboardEvent) => void
   private _rs: () => void
   private isAiming = false
+  /** Pointer that started the active aim gesture, if any. */
+  private aimPointerId: number | null = null
   private lastPointerType = "mouse"
 
   constructor(cv: HTMLCanvasElement) {
@@ -282,6 +284,9 @@ export class BubbleShooterEngine {
       this.uiEat = false
       return
     }
+    // A second finger must not replace the live aim gesture. In particular,
+    // its pointerup must never release the first finger's shot.
+    if (this.aimPointerId !== null) return
     this.lastPointerType = e.pointerType
     try {
       if (typeof this.cv.setPointerCapture === "function") {
@@ -292,12 +297,14 @@ export class BubbleShooterEngine {
     this.plx = l.x
     this.ply = l.y
     if (this.canShoot) {
+      this.aimPointerId = e.pointerId
       this.isAiming = true
       this.calcTraj()
     }
   }
 
   private onUp(e: PointerEvent) {
+    if (e.pointerId !== this.aimPointerId) return
     this.lastPointerType = e.pointerType
     try {
       if (typeof this.cv.releasePointerCapture === "function") {
@@ -305,6 +312,7 @@ export class BubbleShooterEngine {
       }
     } catch {}
     if (!this.isAiming) return
+    this.aimPointerId = null
     this.isAiming = false
     const l = this.sToL(e.clientX, e.clientY)
     this.plx = l.x
@@ -316,12 +324,14 @@ export class BubbleShooterEngine {
   }
 
   private onCancel(e: PointerEvent) {
+    if (e.pointerId !== this.aimPointerId) return
     this.lastPointerType = e.pointerType
     try {
       if (typeof this.cv.releasePointerCapture === "function") {
         this.cv.releasePointerCapture(e.pointerId)
       }
     } catch {}
+    this.aimPointerId = null
     this.isAiming = false
     this.clearTrajectory()
   }

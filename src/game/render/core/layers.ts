@@ -90,6 +90,13 @@ class CannonContainer extends Container {
     }
     if (onSwapNext) {
       this.nextSlot.on("pointertap", onSwapNext)
+      this.loadedBubble.on("pointertap", onSwapNext)
+    }
+
+    this.loadedBubble.eventMode = "static"
+    this.loadedBubble.cursor = "pointer"
+    if (consumePointerDown) {
+      this.loadedBubble.on("pointerdown", consumePointerDown)
     }
     this.addChild(
       this.shadow,
@@ -134,6 +141,7 @@ class CannonContainer extends Container {
     this.loadedBubble.position.set(0, -5)
     this.loadedBubble.setScale((l.R / TEX_BR) * 1.05)
     this.loadedBubble.setColor(current)
+    this.loadedBubble.hitArea = new Circle(0, 0, Math.max(26, l.R * 1.05))
     this.nextSlot.position.set(72, 18)
     this.nextSlot.hitArea = new Circle(0, 0, Math.max(26, l.R))
     this.nextBubble.position.set(0, 0)
