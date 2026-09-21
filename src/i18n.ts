@@ -1,32 +1,40 @@
-import i18n from "i18next";
-import { initReactI18next } from "react-i18next";
+import i18n from "i18next"
+import { initReactI18next } from "react-i18next"
 
-const LANGUAGE_STORAGE_KEY = "08-shoot-language";
-type SupportedLanguage = "vi" | "en";
-const isSupportedLanguage = (value: string | null): value is SupportedLanguage => value === "vi" || value === "en";
+const LANGUAGE_STORAGE_KEY = "08-shoot-language"
+type SupportedLanguage = "vi" | "en"
+const isSupportedLanguage = (
+  value: string | null,
+): value is SupportedLanguage => value === "vi" || value === "en"
 const getInitialLanguage = (): SupportedLanguage => {
-  if (typeof window === "undefined") return "en";
+  if (typeof window === "undefined") return "en"
   try {
-    const value = window.localStorage.getItem(LANGUAGE_STORAGE_KEY);
-    if (isSupportedLanguage(value)) return value;
+    const value = window.localStorage.getItem(LANGUAGE_STORAGE_KEY)
+    if (isSupportedLanguage(value)) return value
   } catch {
     // Storage read failure fallback
   }
-  
-  return "en";
-};
+
+  return "en"
+}
 
 const persistLanguage = (language: string): void => {
-  const normalized = language.split("-")[0];
-  if (typeof window === "undefined" || !isSupportedLanguage(normalized)) return;
-  try { window.localStorage.setItem(LANGUAGE_STORAGE_KEY, normalized); } catch { /* Optional persistence. */ }
-};
+  const normalized = language.split("-")[0]
+  if (typeof window === "undefined" || !isSupportedLanguage(normalized)) return
+  try {
+    window.localStorage.setItem(LANGUAGE_STORAGE_KEY, normalized)
+  } catch {
+    /* Optional persistence. */
+  }
+}
 
 const syncDocumentLang = (language: string): void => {
-  if (typeof document === "undefined") return;
-  const normalized = language.split("-")[0];
-  document.documentElement.lang = isSupportedLanguage(normalized) ? normalized : "en";
-};
+  if (typeof document === "undefined") return
+  const normalized = language.split("-")[0]
+  document.documentElement.lang = isSupportedLanguage(normalized)
+    ? normalized
+    : "en"
+}
 
 const resources = {
   vi: {
@@ -107,23 +115,21 @@ const resources = {
       },
     },
   },
-} as const;
+} as const
 
-const initialLanguage = getInitialLanguage();
-syncDocumentLang(initialLanguage);
+const initialLanguage = getInitialLanguage()
+syncDocumentLang(initialLanguage)
 
-void i18n
-  .use(initReactI18next)
-  .init({
-    resources,
-    lng: initialLanguage,
-    supportedLngs: ["vi", "en"],
-    fallbackLng: "en",
-    interpolation: { escapeValue: false },
-  });
+void i18n.use(initReactI18next).init({
+  resources,
+  lng: initialLanguage,
+  supportedLngs: ["vi", "en"],
+  fallbackLng: "en",
+  interpolation: { escapeValue: false },
+})
 i18n.on("languageChanged", (lang) => {
-  persistLanguage(lang);
-  syncDocumentLang(lang);
-});
+  persistLanguage(lang)
+  syncDocumentLang(lang)
+})
 
-export default i18n;
+export default i18n

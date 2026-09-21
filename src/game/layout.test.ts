@@ -43,10 +43,7 @@ describe("compact HUD layout", () => {
     expect(layout.hudRect.height / (layout.R * 2)).toBeGreaterThan(1.4)
     expect(layout.hudRect.height / (layout.R * 2)).toBeLessThan(1.65)
     expect(layout.DANGER_ROW).toBeGreaterThan(10)
-    expect(layout.shooterTop - layout.DANGER_Y).toBeCloseTo(
-      layout.R * 2.4,
-      4,
-    )
+    expect(layout.shooterTop - layout.DANGER_Y).toBeCloseTo(layout.R * 2.4, 4)
     expect(layout.DANGER_Y).toBeLessThan(layout.SHOOTER_Y - layout.R * 2)
   })
 

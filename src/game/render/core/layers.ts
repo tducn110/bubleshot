@@ -61,8 +61,9 @@ class CannonContainer extends Container {
   private readonly muzzle = new Graphics()
   readonly loadedBubble: BubbleVisual
   readonly nextBubble: BubbleVisual
+  private readonly nextSlot = new Container({ label: "NextSlot" })
   private readonly nextLabel = new Text({
-    text: "NEXT",
+    text: "SWAP",
     style: {
       fontFamily: GAME_FONT_STACK,
       fontSize: 9,
@@ -73,10 +74,23 @@ class CannonContainer extends Container {
     anchor: { x: 0.5, y: 0.5 },
   })
 
-  constructor(t: GameTextures) {
+  constructor(
+    t: GameTextures,
+    consumePointerDown?: () => void,
+    onSwapNext?: () => void,
+  ) {
     super({ label: "Cannon" })
     this.loadedBubble = new BubbleVisual(t)
     this.nextBubble = new BubbleVisual(t)
+    this.nextSlot.addChild(this.nextBubble, this.nextLabel)
+    this.nextSlot.eventMode = "static"
+    this.nextSlot.cursor = "pointer"
+    if (consumePointerDown) {
+      this.nextSlot.on("pointerdown", consumePointerDown)
+    }
+    if (onSwapNext) {
+      this.nextSlot.on("pointertap", onSwapNext)
+    }
     this.addChild(
       this.shadow,
       this.barrel,
@@ -85,8 +99,7 @@ class CannonContainer extends Container {
       this.socket,
       this.muzzle,
       this.loadedBubble,
-      this.nextBubble,
-      this.nextLabel,
+      this.nextSlot,
     )
   }
 
@@ -121,10 +134,12 @@ class CannonContainer extends Container {
     this.loadedBubble.position.set(0, -5)
     this.loadedBubble.setScale((l.R / TEX_BR) * 1.05)
     this.loadedBubble.setColor(current)
-    this.nextBubble.position.set(72, 18)
-    this.nextBubble.setScale((l.R / TEX_BR) * 0.64)
+    this.nextSlot.position.set(72, 18)
+    this.nextSlot.hitArea = new Circle(0, 0, Math.max(26, l.R))
+    this.nextBubble.position.set(0, 0)
+    this.nextBubble.setScale((l.R / TEX_BR) * 0.7)
     this.nextBubble.setColor(next)
-    this.nextLabel.position.set(72, 37)
+    this.nextLabel.position.set(0, 22)
   }
 
   setAim(angle: number) {
@@ -200,6 +215,7 @@ export class SceneLayers {
     ) => void,
     consumePointerDown: () => void,
     onPowerUp: (id: PowerUpId) => void,
+    onSwapNext?: () => void,
   ) {
     this.bg = new Sprite({ label: "Background" })
     this.bg.anchor.set(0.5)
@@ -225,7 +241,7 @@ export class SceneLayers {
       anchor: 0.5,
       tint: "#FFE04B",
     })
-    this.cannon = new CannonContainer(t)
+    this.cannon = new CannonContainer(t, consumePointerDown, onSwapNext)
     for (const [index, iconName] of this.powerUps.entries()) {
       const root = new Container({ label: `PowerUp${index + 1}` })
       const bg = new Graphics({ label: `PowerUp${index + 1}Background` })
@@ -453,7 +469,10 @@ export class SceneLayers {
 
   private syncPowerUps(v: GameView) {
     const key = v.powerUps
-      .map((power) => `${power.id}:${Number(power.available)}:${Number(power.armed)}`)
+      .map(
+        (power) =>
+          `${power.id}:${Number(power.available)}:${Number(power.armed)}`,
+      )
       .join("|")
     if (key === this.powerUpStateKey) return
     this.powerUpStateKey = key
@@ -467,7 +486,7 @@ export class SceneLayers {
   }
 
   private drawPowerUp(
-    visual: (typeof this.powerUpButtons)[number],
+    visual: typeof this.powerUpButtons[number],
     status: PowerUpStatus,
     size: number,
   ) {
@@ -653,7 +672,9 @@ export class SceneLayers {
     this.impactSprite.visible = !!impact
     if (impact) {
       this.impactSprite.position.set(impact.x, impact.y)
-      this.impactSprite.scale.set(1.25)
+      this.impactSprite.tint = COLORS[v.cur]
+      const pulseScale = 1.18 + Math.sin(v.fx.pulse * 8) * 0.16
+      this.impactSprite.scale.set(pulseScale)
       this.impactSprite.alpha = 0.86 + Math.sin(v.fx.pulse * 7) * 0.12
     }
   }

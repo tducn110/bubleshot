@@ -75,6 +75,19 @@ describe("Board.resolveVolley", () => {
     expect(board.version).toBe(version)
     expect(board.cell(0, 1)).toBeNull()
   })
+
+  it("returns accurate list of distinct active colors on the board", () => {
+    const board = new Board(new Layout(390, 844))
+    expect(board.getActiveColors()).toEqual([])
+
+    board.set(0, 0, 2)
+    board.set(0, 1, 4)
+    board.set(1, 0, 2)
+    expect(board.getActiveColors().sort()).toEqual([2, 4])
+
+    board.set(0, 1, null)
+    expect(board.getActiveColors()).toEqual([2])
+  })
 })
 
 describe("BubbleShooterEngine lifecycle and volley transaction", () => {
@@ -313,6 +326,23 @@ describe("BubbleShooterEngine lifecycle and volley transaction", () => {
     transaction.abortVolleyWithoutPlacement()
     expect(engine.phase).not.toBe("LOSE")
     expect(["READY", "BOARD_DESCENDING", "WIN"]).toContain(engine.phase)
+    engine.destroy()
+  })
+
+  it("swaps current and next bubbles when ready", () => {
+    const canvas = fakeCanvas(true)
+    const engine = new BubbleShooterEngine(canvas)
+    engine.activate()
+    expect(engine.phase).toBe("READY")
+
+    const originalCur = engine.cur
+    const originalNxt = engine.nxt
+
+    const swapped = engine.swapCurrentAndNext()
+    expect(swapped).toBe(true)
+    expect(engine.cur).toBe(originalNxt)
+    expect(engine.nxt).toBe(originalCur)
+
     engine.destroy()
   })
 })

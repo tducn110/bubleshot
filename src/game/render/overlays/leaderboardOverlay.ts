@@ -303,8 +303,20 @@ export class LeaderboardOverlay {
     anchor: 0.5,
     label: "LeaderboardTrophyIcon",
   })
-  private readonly title = label(i18n.t("leaderboard.title", "BẢNG XẾP HẠNG"), 22, 800, C.text, 0.5)
-  private readonly subtitle = label(i18n.t("leaderboard.subtitle", "TOP 10 CAO THỦ"), 11, 700, C.muted, 0.5)
+  private readonly title = label(
+    i18n.t("leaderboard.title", "BẢNG XẾP HẠNG"),
+    22,
+    800,
+    C.text,
+    0.5,
+  )
+  private readonly subtitle = label(
+    i18n.t("leaderboard.subtitle", "TOP 10 CAO THỦ"),
+    11,
+    700,
+    C.muted,
+    0.5,
+  )
   private readonly frame = new Container({ label: "LeaderboardContentFrame" })
   private readonly frameFill = new Graphics({
     label: "LeaderboardContentFrameBackground",
@@ -318,9 +330,20 @@ export class LeaderboardOverlay {
     label: "LeaderboardCurrentPlayerBackground",
   })
   private readonly currentAvatar: Avatar
-  private readonly currentName = label(i18n.t("leaderboard.you", "BẠN"), 15, 800, C.text)
+  private readonly currentName = label(
+    i18n.t("leaderboard.you", "BẠN"),
+    15,
+    800,
+    C.text,
+  )
   private readonly currentScore = label("0", 22, 800, C.text)
-  private readonly currentRankLabel = label(i18n.t("leaderboard.rank", "HẠNG"), 10, 700, C.muted, 0.5)
+  private readonly currentRankLabel = label(
+    i18n.t("leaderboard.rank", "HẠNG"),
+    10,
+    700,
+    C.muted,
+    0.5,
+  )
   private readonly currentRank = label("—", 24, 800, C.text, 0.5)
   private readonly textures: GameTextures
   private cards: Podium[] = []
@@ -385,7 +408,9 @@ export class LeaderboardOverlay {
       .refreshLeaderboard()
       .then((res) => {
         if (res?.entries) {
-          const playerName = winkGame.displayName || (res.me?.displayName ?? i18n.t("leaderboard.you", "BẠN"))
+          const playerName =
+            winkGame.displayName ||
+            (res.me?.displayName ?? i18n.t("leaderboard.you", "BẠN"))
           this.setData({
             entries: res.entries.map((e) => ({
               rank: e.rank,
@@ -395,8 +420,8 @@ export class LeaderboardOverlay {
             })),
             currentPlayer: {
               name: playerName,
-              score: res.me?.score ?? (this.data.currentPlayer?.score ?? 0),
-              rank: res.me?.rank ?? (this.data.currentPlayer?.rank ?? null),
+              score: res.me?.score ?? this.data.currentPlayer?.score ?? 0,
+              rank: res.me?.rank ?? this.data.currentPlayer?.rank ?? null,
               avatar: null,
             },
           })

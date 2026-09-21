@@ -14,10 +14,11 @@ export interface TrajectorySegment {
   readonly distance: number
 }
 
-export type TrajectoryTerminal =
-  | { readonly kind: "ceiling" }
-  | { readonly kind: "bubble"; readonly row: number; readonly col: number }
-  | { readonly kind: "limit" }
+export type TrajectoryTerminal = { readonly kind: "ceiling" } | {
+  readonly kind: "bubble"
+  readonly row: number
+  readonly col: number
+} | { readonly kind: "limit" }
 
 export interface TrajectoryResult {
   readonly x: number
@@ -58,7 +59,9 @@ type EventKind = "limit" | "wall" | "ceiling" | "bubble"
  * geometry used by the live projectile. The caller owns board lookup and may
  * render segments or simply consume the final state.
  */
-export function traceTrajectory(options: TraceTrajectoryOptions): TrajectoryResult {
+export function traceTrajectory(
+  options: TraceTrajectoryOptions,
+): TrajectoryResult {
   let x = options.origin.x
   let y = options.origin.y
   let vx = options.velocity.x
@@ -111,8 +114,7 @@ export function traceTrajectory(options: TraceTrajectoryOptions): TrajectoryResu
       const relY = y - bubble.y
       const projection = -(relX * dx + relY * dy)
       if (projection <= EPSILON || projection >= distance) continue
-      const closestSquared =
-        relX * relX + relY * relY - projection * projection
+      const closestSquared = relX * relX + relY * relY - projection * projection
       const radiusSquared = options.collisionRadius * options.collisionRadius
       if (closestSquared > radiusSquared) continue
       const contact = projection - Math.sqrt(radiusSquared - closestSquared)

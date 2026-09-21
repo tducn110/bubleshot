@@ -149,6 +149,23 @@ export class Board {
     this.rowShiftVersion++
   }
 
+  /** Returns an array of distinct bubble colors currently present on the board. */
+  getActiveColors(): number[] {
+    const seen = new Set<number>()
+    for (let r = 0; r < this.rows.length; r++) {
+      const row = this.rows[r]
+      if (!row) continue
+      const cap = this.layout.rowCapacity(r, this.gridParity)
+      for (let c = 0; c < cap; c++) {
+        const color = row[c]
+        if (color !== null && color !== undefined) {
+          seen.add(color)
+        }
+      }
+    }
+    return Array.from(seen)
+  }
+
   private ensureIds() {
     this.ids.length = this.rows.length
     for (let row = 0; row < this.rows.length; row++) {

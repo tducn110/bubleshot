@@ -25,6 +25,7 @@ import {
   type TrajectoryBubble,
   type TrajectorySegment,
 } from "./trajectory"
+import { gameAudio } from "./audio"
 import { winkGame, type WinkRound } from "../integrations/wink/client"
 import type {
   AnimationCommand,
@@ -83,6 +84,8 @@ export class BubbleShooterEngine {
   private plx = this.layout.SHOOTER_X
   private ply = this.layout.SHOOTER_Y - 100
   private pp: Phase = "LOADING"
+  private phaseTimer = 0
+  private lastWatchedPhase: Phase = "LOADING"
   private colorsInPlay = 5
   private uiEat = false
   private recoilT = 0
@@ -274,11 +277,17 @@ export class BubbleShooterEngine {
 
   private onDown(e: PointerEvent) {
     e.preventDefault()
+    gameAudio.unlock()
     if (this.uiEat) {
       this.uiEat = false
       return
     }
     this.lastPointerType = e.pointerType
+    try {
+      if (typeof this.cv.setPointerCapture === "function") {
+        this.cv.setPointerCapture(e.pointerId)
+      }
+    } catch {}
     const l = this.sToL(e.clientX, e.clientY)
     this.plx = l.x
     this.ply = l.y
@@ -290,6 +299,11 @@ export class BubbleShooterEngine {
 
   private onUp(e: PointerEvent) {
     this.lastPointerType = e.pointerType
+    try {
+      if (typeof this.cv.releasePointerCapture === "function") {
+        this.cv.releasePointerCapture(e.pointerId)
+      }
+    } catch {}
     if (!this.isAiming) return
     this.isAiming = false
     const l = this.sToL(e.clientX, e.clientY)
@@ -303,6 +317,11 @@ export class BubbleShooterEngine {
 
   private onCancel(e: PointerEvent) {
     this.lastPointerType = e.pointerType
+    try {
+      if (typeof this.cv.releasePointerCapture === "function") {
+        this.cv.releasePointerCapture(e.pointerId)
+      }
+    } catch {}
     this.isAiming = false
     this.clearTrajectory()
   }
@@ -385,6 +404,20 @@ export class BubbleShooterEngine {
     this.armedPowerUp = this.armedPowerUp === id ? null : id
     for (const item of this.powerUpStates)
       item.armed = item.id === this.armedPowerUp
+    if (this.armedPowerUp) {
+      gameAudio.playPowerUp()
+    }
+    this.calcTraj()
+    return true
+  }
+
+  /** Swaps the current shooter bubble with the next upcoming bubble. */
+  swapCurrentAndNext(): boolean {
+    if (!this.canShoot) return false
+    const temp = this.cur
+    this.cur = this.nxt
+    this.nxt = temp
+    gameAudio.playSwap()
     this.calcTraj()
     return true
   }
@@ -416,9 +449,17 @@ export class BubbleShooterEngine {
     this.pendingAnimations.clear()
     this.commandRemaining.clear()
     this.completionQueue.length = 0
-    this.cur = rndColor(sp.colors)
-    this.nxt = rndColor(sp.colors)
+    this.cur = this.pickNextColor()
+    this.nxt = this.pickNextColor()
     if (this.phase === "READY") this.calcTraj()
+  }
+
+  private pickNextColor(): number {
+    const active = this.board.getActiveColors()
+    if (active.length > 0) {
+      return active[Math.floor(Math.random() * active.length)]
+    }
+    return rndColor(this.colorsInPlay)
   }
 
   private clearTrajectory() {
@@ -464,21 +505,22 @@ export class BubbleShooterEngine {
     const { SHOOTER_X, SHOOTER_Y } = this.layout
     const dx = pointerX - SHOOTER_X
     const dy = pointerY - SHOOTER_Y
-    if (dy >= -5) return dx >= 0 ? Math.PI * 0.82 : -Math.PI * 0.82
+    if (Math.hypot(dx, dy) < 35) return 0
+    if (dy >= -5) return dx >= 0 ? Math.PI * 0.78 : -Math.PI * 0.78
     const a = Math.atan2(dx, -dy)
     return Math.max(-Math.PI * 0.82, Math.min(Math.PI * 0.82, a))
   }
 
   private doShoot() {
     if (!this.canShoot) return
-    if (this.ply >= this.layout.SHOOTER_Y - 5) return
+    if (this.ply > this.layout.LH) return
     if (!this.currentRound) {
       this.currentRound = winkGame.startRound()
     }
     const selectedPower = this.armedPowerUp
     const count =
       selectedPower === "rows3"
-        ? (Math.max(3, this.shotMode) as ShotMode)
+        ? Math.max(3, this.shotMode) as ShotMode
         : this.shotMode
     const projectilePower =
       selectedPower === "bomb" || selectedPower === "rainbow"
@@ -517,11 +559,12 @@ export class BubbleShooterEngine {
       this.armedPowerUp = null
     }
     this.cur = this.nxt
-    this.nxt = rndColor(this.colorsInPlay)
+    this.nxt = this.pickNextColor()
     this.moves = Math.max(0, this.moves - 1)
     this.recoilT = 0.12
     this.phase = "VOLLEY_FLYING"
     this.clearTrajectory()
+    gameAudio.playShoot()
   }
 
   /**
@@ -681,8 +724,10 @@ export class BubbleShooterEngine {
         s.y = result.y
         s.vx = result.vx
         s.vy = result.vy
-        if (result.lastWallX !== null && result.lastWallY !== null)
+        if (result.lastWallX !== null && result.lastWallY !== null) {
           this.fx.spawnWallHit(result.lastWallX, result.lastWallY, COLORS[s.c])
+          gameAudio.playBounce()
+        }
         this.fx.addTrail(s.x, s.y, COLORS[s.c])
         let snapCell = -1
         if (result.terminal.kind === "ceiling") {
@@ -751,11 +796,7 @@ export class BubbleShooterEngine {
     for (const candidate of candidates) {
       const color = this.board.cell(candidate.row, candidate.col)
       if (color === null) continue
-      const count = this.board.scanColor(
-        candidate.row,
-        candidate.col,
-        color,
-      )
+      const count = this.board.scanColor(candidate.row, candidate.col, color)
       if (count > bestCount || (count === bestCount && color === fallback)) {
         bestColor = color
         bestCount = count
@@ -923,6 +964,7 @@ export class BubbleShooterEngine {
           this.feverActive = true
           this.feverShots = FEVER_SHOTS
           this.feverProgress = 0
+          gameAudio.playPowerUp()
           this.fx.spawnPopup(
             this.layout.SHOOTER_X,
             this.layout.LH * 0.32,
@@ -935,7 +977,9 @@ export class BubbleShooterEngine {
         this.combo = 0
       }
 
-      const removedVisuals = removed.map((bubble) => this.toVisualBubble(bubble))
+      const removedVisuals = removed.map((bubble) =>
+        this.toVisualBubble(bubble),
+      )
       const center = this.visualCenter(removedVisuals)
       this.registerCommand(
         this.fx.queueMatch(this.actionId, removedVisuals, center.x, center.y),
@@ -1099,9 +1143,10 @@ export class BubbleShooterEngine {
     if (this.board.isClear()) {
       this.starsEarned = this.moves >= 15 ? 3 : this.moves >= 8 ? 2 : 1
       this.phase = "WIN"
+      gameAudio.playWin()
       if (this.currentRound) {
         winkGame.completeRound(this.currentRound)
-        winkGame.submitFinalScore({ score: this.score })
+        winkGame.submitFinalScore({ score: this.score }).catch(() => {})
         this.currentRound = null
       }
       this.fx.shake(0.7)
@@ -1117,9 +1162,10 @@ export class BubbleShooterEngine {
           const { y } = this.layout.gToW(r, col, this.board.gridParity)
           if (y + R >= DANGER_Y) {
             this.phase = "LOSE"
+            gameAudio.playLose()
             if (this.currentRound) {
               winkGame.completeRound(this.currentRound)
-              winkGame.submitFinalScore({ score: this.score })
+              winkGame.submitFinalScore({ score: this.score }).catch(() => {})
               this.currentRound = null
             }
             return
@@ -1134,6 +1180,23 @@ export class BubbleShooterEngine {
   private update(dt: number) {
     // Pause freezes the gameplay clock AND gameplay FX; overlay UI is static.
     if (this.phase !== "PAUSED") {
+      if (this.phase === this.lastWatchedPhase) {
+        this.phaseTimer += dt
+        if (
+          this.phaseTimer > 2.5 &&
+          (this.phase === "VOLLEY_FLYING" ||
+            this.phase === "RESOLVE_VOLLEY" ||
+            this.phase === "POPPING" ||
+            this.phase === "DROPPING")
+        ) {
+          this.recoverFromStaleVolley()
+          this.phaseTimer = 0
+        }
+      } else {
+        this.lastWatchedPhase = this.phase
+        this.phaseTimer = 0
+      }
+
       this.drainAnimationCompletions()
       this.recoilT = Math.max(0, this.recoilT - dt)
       this.fx.step(dt)

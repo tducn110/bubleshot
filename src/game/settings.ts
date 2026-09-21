@@ -1,3 +1,5 @@
+import { gameAudio } from "./audio"
+
 export interface GameSettingsSnapshot {
   readonly bgmEnabled: boolean
   readonly sfxEnabled: boolean
@@ -48,6 +50,8 @@ export class GameSettingsStore {
     private readonly storage: Storage | undefined = getBrowserStorage(),
   ) {
     this.snapshot = loadSettings(storage)
+    gameAudio.setSfxEnabled(this.snapshot.sfxEnabled)
+    gameAudio.setBgmEnabled(this.snapshot.bgmEnabled)
   }
 
   get value(): GameSettingsSnapshot {
@@ -57,6 +61,8 @@ export class GameSettingsStore {
   set(key: GameSettingKey, enabled: boolean) {
     if (this.snapshot[key] === enabled) return
     this.snapshot = { ...this.snapshot, [key]: enabled }
+    if (key === "sfxEnabled") gameAudio.setSfxEnabled(enabled)
+    if (key === "bgmEnabled") gameAudio.setBgmEnabled(enabled)
     this.persist()
   }
 
@@ -66,10 +72,16 @@ export class GameSettingsStore {
 
   setParentMuted(muted: boolean) {
     this.parentMuted = muted
+    gameAudio.setParentMuted(muted)
   }
 
   setGameplayPaused(paused: boolean) {
     this.gameplayPaused = paused
+    if (paused) {
+      gameAudio.stopBgm()
+    } else if (this.bgmShouldPlay) {
+      gameAudio.startBgm()
+    }
   }
 
   get bgmShouldPlay() {

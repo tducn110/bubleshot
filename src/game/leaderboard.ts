@@ -44,7 +44,12 @@ export const DEMO_LEADERBOARD_ENTRIES: readonly LeaderboardEntry[] = [
 
 export const DEMO_LEADERBOARD_DATA: LeaderboardData = {
   entries: DEMO_LEADERBOARD_ENTRIES,
-  currentPlayer: { name: i18n.t("leaderboard.you", "YOU"), score: 0, rank: null, avatar: null },
+  currentPlayer: {
+    name: i18n.t("leaderboard.you", "YOU"),
+    score: 0,
+    rank: null,
+    avatar: null,
+  },
 }
 
 export function topLeaderboardEntries(

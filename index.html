@@ -4,8 +4,8 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Bubble Shooter</title>
-    <script src="https://sdk.winkgames.fun/v1/wink.js"></script>
-      <link rel="preconnect" href="https://fonts.googleapis.com">
+    <script defer src="https://sdk.winkgames.fun/v1/wink.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet">
 <style>
@@ -162,6 +162,16 @@
           }
         };
         window.__PAPA_DISMISS_LOADING__ = dismissScreen;
+
+        // Safety watchdog: ensure loading screen NEVER hangs more than 3.5s
+        setTimeout(function() {
+          if (!isDone) {
+            targetProgress = 100;
+            currentProgress = 100;
+            updateProgressVisual(100);
+            dismissScreen();
+          }
+        }, 3500);
       })();
     </script>
 

@@ -291,13 +291,38 @@ export class OverlaysLayer {
     this.winBox = new Container({ label: "WinDialog" })
     this.winRank = line("RANK 0 / 3", 12, 800, "rgba(197,235,255,.75)", -40)
     this.winScore = line("0", 26, 700, "#FFFFFF", 40)
-    this.winTitle = title(i18n.t("game.level_clear", "LEVEL CLEAR!"), 30, "#FFE04B", -82)
-    this.winScoreLabel = line(i18n.t("game.score", "SCORE").toUpperCase(), 12, 500, "rgba(180,200,255,.72)", 10)
-    this.winRetryBtn = button(t, -40, 78, 68, 36, i18n.t("game.retry", "RETRY").toUpperCase(), "#E94560", () =>
-      this.runTransition("retry_stage", () => this.engine.retry()),
+    this.winTitle = title(
+      i18n.t("game.level_clear", "LEVEL CLEAR!"),
+      30,
+      "#FFE04B",
+      -82,
     )
-    this.winNextBtn = button(t, 40, 78, 68, 36, i18n.t("game.next", "NEXT").toUpperCase(), "#2DC653", () =>
-      this.runTransition("next_stage", () => this.engine.nextStage()),
+    this.winScoreLabel = line(
+      i18n.t("game.score", "SCORE").toUpperCase(),
+      12,
+      500,
+      "rgba(180,200,255,.72)",
+      10,
+    )
+    this.winRetryBtn = button(
+      t,
+      -40,
+      78,
+      68,
+      36,
+      i18n.t("game.retry", "RETRY").toUpperCase(),
+      "#E94560",
+      () => this.runTransition("retry_stage", () => this.engine.retry()),
+    )
+    this.winNextBtn = button(
+      t,
+      40,
+      78,
+      68,
+      36,
+      i18n.t("game.next", "NEXT").toUpperCase(),
+      "#2DC653",
+      () => this.runTransition("next_stage", () => this.engine.nextStage()),
     )
     this.winBox.addChild(
       this.winTitle,
@@ -314,8 +339,19 @@ export class OverlaysLayer {
     this.loseCard = card(t, 292, 260, true)
     this.loseBox = new Container({ label: "LoseDialog" })
     this.loseScore = line("0", 26, 700, "#FFFFFF", 6)
-    this.loseTitle = title(i18n.t("game.you_lose", "YOU LOST!").toUpperCase(), 22, "#FF4D6D", -88)
-    this.loseScoreLabel = line(i18n.t("game.score", "SCORE").toUpperCase(), 12, 700, "#dff7ff", -35)
+    this.loseTitle = title(
+      i18n.t("game.you_lose", "YOU LOST!").toUpperCase(),
+      22,
+      "#FF4D6D",
+      -88,
+    )
+    this.loseScoreLabel = line(
+      i18n.t("game.score", "SCORE").toUpperCase(),
+      12,
+      700,
+      "#dff7ff",
+      -35,
+    )
     this.loseRetryBtn = button(
       t,
       0,
@@ -350,8 +386,14 @@ export class OverlaysLayer {
     if (winOn) {
       this.winTitle.text = i18n.t("game.level_clear", "LEVEL CLEAR!")
       this.winScoreLabel.text = i18n.t("game.score", "SCORE").toUpperCase()
-      this.setButtonText(this.winRetryBtn, i18n.t("game.retry", "RETRY").toUpperCase())
-      this.setButtonText(this.winNextBtn, i18n.t("game.next", "NEXT").toUpperCase())
+      this.setButtonText(
+        this.winRetryBtn,
+        i18n.t("game.retry", "RETRY").toUpperCase(),
+      )
+      this.setButtonText(
+        this.winNextBtn,
+        i18n.t("game.next", "NEXT").toUpperCase(),
+      )
       const s = v.score.toLocaleString()
       if (s !== this.lastWinScore) {
         this.winScore.text = s
@@ -366,7 +408,10 @@ export class OverlaysLayer {
     if (loseOn) {
       this.loseTitle.text = i18n.t("game.you_lose", "YOU LOST!").toUpperCase()
       this.loseScoreLabel.text = i18n.t("game.score", "SCORE").toUpperCase()
-      this.setButtonText(this.loseRetryBtn, i18n.t("game.play_again", "PLAY AGAIN").toUpperCase())
+      this.setButtonText(
+        this.loseRetryBtn,
+        i18n.t("game.play_again", "PLAY AGAIN").toUpperCase(),
+      )
       const s = v.score.toLocaleString()
       if (s !== this.lastLoseScore) {
         this.loseScore.text = s

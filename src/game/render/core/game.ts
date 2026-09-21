@@ -81,6 +81,7 @@ export class PixiGame {
             this.engine.notifyAnimationComplete(commandId, actionId, kind),
           () => this.engine.consumeNextDown(),
           (powerUp) => this.engine.activatePowerUp(powerUp),
+          () => this.engine.swapCurrentAndNext(),
         ),
     )
     this.hud = new HudLayer(this.uiLayer, this.textures, {
@@ -137,6 +138,7 @@ export class PixiGame {
     this.root.scale.set(v.sc)
     this.shake.position.set(v.fx.csx, v.fx.csy)
     const t = this.textures!
+    this.settings.setGameplayPaused(v.phase === "PAUSED")
     this.layers?.sync(v, t)
     this.hud?.sync(v)
     this.overlays?.sync(v)
@@ -177,6 +179,7 @@ export class PixiGame {
   destroy() {
     if (this.destroyed) return
     this.destroyed = true
+    this.settings.setGameplayPaused(true)
     this.app.ticker.remove(this.engineTick)
     this.app.ticker.remove(this.syncTick)
     this.layers?.destroy()

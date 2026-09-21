@@ -12,6 +12,7 @@ import type {
 } from "../../types"
 import type { BubbleVisual } from "../hud/bubbleVisual"
 import type { GameTextures } from "../core/textures"
+import { gameAudio } from "../../audio"
 
 gsap.registerPlugin(PixiPlugin)
 PixiPlugin.registerPIXI({ Container, Sprite })
@@ -219,6 +220,7 @@ export class GameplayAnimations {
   }
 
   private startMatch(command: MatchAnimationCommand) {
+    gameAudio.playPop(Math.max(0, command.members.length - 3))
     const group = this.takeGroup(command.originX, command.originY)
     const claims = this.claimMembers(
       command.members,
@@ -260,6 +262,7 @@ export class GameplayAnimations {
   }
 
   private startDrop(command: DropAnimationCommand) {
+    gameAudio.playDrop()
     const group = this.takeGroup(command.originX, command.originY)
     const claims = this.claimMembers(
       command.members,
