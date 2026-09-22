@@ -12,6 +12,7 @@ import type { GameTextures } from "../core/textures"
 import { GAME_FONT_STACK } from "../core/typography"
 import { LEADERBOARD_PALETTE } from "../core/colors"
 import i18n from "../../../i18n"
+import { gameAudio } from "../../audio"
 
 export interface HudActions {
   /** Notify the application shell that the player requested the dashboard. */
@@ -156,10 +157,12 @@ export class HudLayer {
       this.actions.consumePointerDown()
     })
     this.dashboard.button.on("pointertap", () => {
+      gameAudio.playSwap()
       this.actions.requestDashboard()
     })
     this.pause.button.on("pointerdown", () => {
       this.actions.consumePointerDown()
+      gameAudio.playSwap()
       this.actions.requestPause()
     })
   }
